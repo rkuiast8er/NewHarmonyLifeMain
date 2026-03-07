@@ -125,7 +125,7 @@ const CATEGORIES = [
   "Arts & Crafts", "Wellness", "Sports & Nature", "Charity", "Other",
 ];
 
-const ADMIN_PASSWORD = "harmony2026";
+const ADMIN_PASSWORD = process.env.REACT_APP_ADMIN_PASSWORD || "harmony2026";
 
 const VENDOR_TYPES = [
   "Produce & Vegetables", "Fruits & Berries", "Herbs & Plants", "Baked Goods",
@@ -290,19 +290,6 @@ const getRecurringDescription = (form) => {
   return null;
 };
 
-const getGoogleCalendarUrl = (ev) => {
-  const start = (ev.startDate || "").replace(/-/g, "") + "T" + (ev.time || "09:00").replace(":", "") + "00";
-  const end = ((ev.endDate || ev.startDate) || "").replace(/-/g, "") + "T" + (ev.endTime || "17:00").replace(":", "") + "00";
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: ev.title || "",
-    dates: `${start}/${end}`,
-    details: ev.description || "",
-    location: ev.address || ev.location || "",
-  });
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-};
-
 const getShareUrls = (ev) => {
   const url = typeof window !== "undefined" ? window.location.href : "";
   const text = encodeURIComponent(`Check out "${ev.title}"`);
@@ -385,42 +372,6 @@ const makeCalLinks = (ev) => {
   };
 };
 
-// ─── PWA MANIFEST INJECTOR ────────────────────────────────────────────────────
-if (typeof document !== "undefined" && !document.getElementById("nh-pwa-manifest")) {
-  const manifest = {
-    name: "New Harmony Life Events",
-    short_name: "NH Events",
-    description: "Community events in the Loess Hills region",
-    start_url: "/",
-    display: "standalone",
-    background_color: "#1C2B1A",
-    theme_color: "#2D6A4F",
-    orientation: "portrait-primary",
-    icons: [
-      { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%231C2B1A'/%3E%3Ctext x='96' y='130' font-size='100' text-anchor='middle'%3E🌿%3C/text%3E%3C/svg%3E", sizes: "192x192", type: "image/svg+xml" },
-      { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%231C2B1A'/%3E%3Ctext x='256' y='360' font-size='280' text-anchor='middle'%3E🌿%3C/text%3E%3C/svg%3E", sizes: "512x512", type: "image/svg+xml" },
-    ],
-  };
-  const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
-  const link = document.createElement("link");
-  link.id = "nh-pwa-manifest";
-  link.rel = "manifest";
-  link.href = URL.createObjectURL(blob);
-  document.head.appendChild(link);
-  // Theme color meta
-  if (!document.querySelector('meta[name="theme-color"]')) {
-    const meta = document.createElement("meta");
-    meta.name = "theme-color"; meta.content = "#2D6A4F";
-    document.head.appendChild(meta);
-  }
-  // Apple touch icon
-  if (!document.querySelector('link[rel="apple-touch-icon"]')) {
-    const al = document.createElement("link");
-    al.rel = "apple-touch-icon";
-    al.href = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='30' fill='%231C2B1A'/%3E%3Ctext x='90' y='125' font-size='90' text-anchor='middle'%3E🌿%3C/text%3E%3C/svg%3E";
-    document.head.appendChild(al);
-  }
-}
 const initials = (u) => {
   if (!u) return "";
   const first = u.firstName || u.first_name || "";
@@ -708,8 +659,9 @@ function AppProvider({ children }) {
       }
     }
     await supabase.from("tickets").update({ status: "cancelled" }).eq("id", ticket.id);
-    const tier = events.find(e => e.id === ticket.eventId)?.ticketTiers?.find(t => t.id === ticket.tierId);
-    const newSold = Math.max(0, (tier?.sold || 1) - ticket.qty);
+    // Fetch fresh sold count from DB to avoid race condition with concurrent purchases
+    const { data: freshTier } = await supabase.from("ticket_tiers").select("sold").eq("id", ticket.tierId).single();
+    const newSold = Math.max(0, (freshTier?.sold ?? 0) - ticket.qty);
     await supabase.from("ticket_tiers").update({ sold: newSold }).eq("id", ticket.tierId);
     // Auto-promote first waitlist entry — send a real email via Resend if configured
     const { data: waitlistEntries } = await supabase.from("waitlist").select("*").eq("event_id", ticket.eventId).order("created_at", { ascending: true }).limit(1);
@@ -750,7 +702,7 @@ function AppProvider({ children }) {
           showToast(`✉️ Waitlist email sent to ${first.name}!`);
         } catch (emailErr) {
           console.warn("Waitlist email failed (non-fatal):", emailErr);
-          showToast(`✉️ ${first.name} on the waitlist has been notified a spot opened up!`);
+          showToast(`⚠️ Waitlist email failed for ${first.name} — notify them manually.`, "warn");
         }
       } else {
         showToast(`✉️ ${first.name} is next on the waitlist — notify them manually if Resend isn't configured.`);
@@ -764,12 +716,12 @@ function AppProvider({ children }) {
   const checkinAttendee = async (evId, ticketId) => {
     const now = new Date().toISOString();
     await supabase.from("tickets").update({ checked_in: true, checkin_time: now }).eq("id", ticketId);
-    setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, checkedIn: true, checkinTime: new Date().toLocaleTimeString() } : t));
+    setMyTickets(prev => prev.map(t => t.ticketId === ticketId ? { ...t, checkedIn: true, checkinTime: new Date().toLocaleTimeString() } : t));
     showToast("✅ Attendee checked in!");
   };
   const undoCheckin = async (ticketId) => {
     await supabase.from("tickets").update({ checked_in: false, checkin_time: null }).eq("id", ticketId);
-    setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, checkedIn: false, checkinTime: null } : t));
+    setMyTickets(prev => prev.map(t => t.ticketId === ticketId ? { ...t, checkedIn: false, checkinTime: null } : t));
     showToast("Check-in undone.", "warn");
   };
 
@@ -823,6 +775,8 @@ function AppProvider({ children }) {
     if (error) { setAuthErrors({ email: error.message }); return; }
     if (data?.user) {
       const profile = { id: data.user.id, first_name: authForm.firstName, last_name: authForm.lastName, email: authForm.email, phone: authForm.phone, city: authForm.city, state: authForm.state, avatar_color: "#40916C", is_admin: false };
+      // Write profile row so login and updateProfile work correctly
+      await supabase.from("profiles").insert(profile);
       setCurrentUser(profile);
     }
     setAuthModal(null);
@@ -968,7 +922,9 @@ function AppProvider({ children }) {
     if (confirmedTickets.length >= 1) earned.push("first_ticket");
     if (confirmedTickets.length >= 5) earned.push("five_events");
     if (confirmedTickets.length >= 10) earned.push("ten_events");
-    if (confirmedTickets.some(t => t.status !== "cancelled" && t.reviewLeft)) earned.push("reviewer");
+    // Check reviews state: badge earned if the user has left at least one review
+    const userReviews = Object.values(reviews).flat();
+    if (currentUser && userReviews.some(r => r.userId === currentUser.id)) earned.push("reviewer");
     const totalRefs = Object.values(refStats || {}).reduce((s, ev) => s + Object.values(ev).reduce((a, c) => a + c, 0), 0);
     if (totalRefs >= 1) earned.push("first_referral");
     if (totalRefs >= 5) earned.push("five_referrals");
@@ -1302,7 +1258,6 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       }));
 
       // Use raw fetch for ticket insert — bypasses custom client quirks
-      console.log("Inserting tickets:", JSON.stringify(ticketInserts));
       const sessionToken = supabase.getSession()?.access_token || SUPABASE_ANON_KEY;
       const ticketRes = await fetch(`${SUPABASE_URL}/rest/v1/tickets`, {
         method: "POST",
@@ -1324,10 +1279,12 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         return;
       }
 
-      // Update tier sold counts and event registered count
+      // Update tier sold counts and event registered count using fresh DB values
       for (const item of cart) {
-        await supabase.from("ticket_tiers").update({ sold: item.tier.sold + item.qty }).eq("id", item.tier.id);
-        await supabase.from("events").update({ registered: (item.event.registered || 0) + item.qty }).eq("id", item.event.id);
+        const { data: freshTier } = await supabase.from("ticket_tiers").select("sold").eq("id", item.tier.id).single();
+        await supabase.from("ticket_tiers").update({ sold: (freshTier?.sold ?? item.tier.sold) + item.qty }).eq("id", item.tier.id);
+        const { data: freshEvent } = await supabase.from("events").select("registered").eq("id", item.event.id).single();
+        await supabase.from("events").update({ registered: (freshEvent?.registered ?? item.event.registered ?? 0) + item.qty }).eq("id", item.event.id);
       }
 
       // Build local ticket objects for display
@@ -2455,48 +2412,6 @@ function EventCard({ ev }) {
     </div>
   );
 }
-    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", overflow: "hidden", transition: "transform 0.2s,box-shadow 0.2s", display: "flex", flexDirection: "column" }}
-      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 16px 48px rgba(44,106,79,0.18)"; }}
-      onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}>
-      <div onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ cursor: "pointer" }}>
-        <div style={{ height: "150px", position: "relative", overflow: "hidden" }}>
-          {fp ? <img src={fp} alt={ev.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ height: "100%", background: `linear-gradient(135deg,${ev.color}22,${ev.color}66)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3rem" }}>{catEmoji(ev.category)}</div>}
-          <div style={{ position: "absolute", top: "10px", left: "10px", background: ev.color, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.category}</div>
-          {ev.vendorInvite && <div style={{ position: "absolute", bottom: "10px", left: "10px", background: T.earth, color: "#fff", borderRadius: "6px", padding: "3px 8px", fontSize: "0.68rem", fontWeight: 700 }}>🛖 Vendors Welcome</div>}
-          {full && <div style={{ position: "absolute", top: "10px", right: "10px", background: T.warn, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>SOLD OUT</div>}
-          {almostFull && !full && <div style={{ position: "absolute", top: "10px", right: "10px", background: "#D97706", color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>Only {spots} left!</div>}
-        </div>
-        <div style={{ padding: "14px 16px 6px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-            <div style={{ color: T.green1, fontSize: "0.75rem", fontWeight: 600 }}>
-              {dateRange(ev)}{multiDay(ev) && <span style={{ marginLeft: "6px", background: T.green5, color: T.green1, borderRadius: "4px", padding: "1px 6px", fontSize: "0.68rem" }}>Multi-day</span>}
-            </div>
-            {ev.time && <div style={{ color: T.stoneL, fontSize: "0.7rem" }}>{fmtTime(ev.time)}</div>}
-          </div>
-          <h3 style={{ color: T.text, fontSize: "1rem", fontWeight: 700, margin: "0 0 4px", lineHeight: 1.3, fontFamily: "'Lora',serif" }}>{ev.title}</h3>
-          <div style={{ color: T.textSoft, fontSize: "0.78rem", marginBottom: "6px" }}>📍 {ev.location}</div>
-          {shortDesc && <p style={{ color: T.textSoft, fontSize: "0.78rem", lineHeight: 1.55, margin: "0 0 8px" }}>{shortDesc}</p>}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-            <div style={{ color: lowestPrice === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "0.95rem" }}>
-              {lowestPrice === 0 ? "Free" : (ev.ticketTiers && ev.ticketTiers.length > 1 ? `From $${lowestPrice}` : `$${lowestPrice}`)}
-            </div>
-            <div style={{ color: full ? T.warn : almostFull ? "#D97706" : T.stoneL, fontSize: "0.7rem", fontWeight: 600 }}>{full ? "Sold out" : `${spots} spot${spots !== 1 ? "s" : ""} left`}</div>
-          </div>
-          <div style={{ height: "4px", background: T.border, borderRadius: "2px", overflow: "hidden", marginBottom: "2px" }}>
-            <div style={{ height: "100%", width: `${pctFull}%`, background: pctFull >= 90 ? T.warn : pctFull >= 70 ? "#D97706" : T.green2, borderRadius: "2px", transition: "width 0.3s" }} />
-          </div>
-        </div>
-      </div>
-      <div style={{ padding: "8px 16px 14px", marginTop: "auto" }}>
-        {registered ? <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px", textAlign: "center", color: T.green1, fontSize: "0.8rem", fontWeight: 700 }}>✓ Registered</div>
-          : isInCart(ev.id, firstTier?.id) ? <button onClick={e => { e.stopPropagation(); setCartOpen(true); }} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart — View Cart 🛒</button>
-          : full ? <button onClick={e => { e.stopPropagation(); joinWaitlist(ev.id); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.gold},#C8940F)`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>🔔 Join Waitlist</button>
-          : <button onClick={e => { e.stopPropagation(); addToCart(ev, 1, firstTier); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{lowestPrice === 0 ? "Register Free 🌿" : "Add to Cart 🛒"}</button>
-        }
-      </div>
-    </div>
-  );
-}
 
 // ─── NAVBAR ───────────────────────────────────────────────────────────────────
 function Navbar() {
@@ -3320,7 +3235,8 @@ function PaymentStep() {
 
 // ─── CHECKOUT VIEW ────────────────────────────────────────────────────────────
 function CheckoutView() {
-  const { cart, cartTotal, checkoutInfo, setCheckoutInfo, checkoutErrors, checkoutStep, setCheckoutStep, validateCheckoutInfo, completeOrder, orderComplete, setView, currentUser, openAuth } = useApp();
+  const { cart, cartTotal, checkoutInfo, setCheckoutInfo, checkoutErrors, checkoutStep, setCheckoutStep, validateCheckoutInfo, completeOrder, orderComplete, setView, setCartOpen, currentUser, openAuth, events } = useApp();
+  const [customAnswers, setCustomAnswers] = React.useState({});
   const onlyFree = cartTotal === 0;
   const steps = [{ n: 1, label: "Your Info" }, { n: 2, label: onlyFree ? "Confirm" : "Payment" }, { n: 3, label: "Done!" }];
   return (
@@ -3429,7 +3345,7 @@ function CheckoutView() {
                   const ev = events.find(e => e.id === t.eventId);
                   if (!ev) return null;
                   return (
-                    <a key={t.eventId} href={getGoogleCalendarUrl(ev)} target="_blank" rel="noopener noreferrer"
+                    <a key={t.eventId} href={makeCalLinks(ev).google} target="_blank" rel="noopener noreferrer"
                       style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginBottom: "10px", padding: "10px 18px", borderRadius: "10px", background: T.bgCard, border: `1px solid ${T.border}`, color: T.textMid, fontSize: "0.85rem", fontWeight: 600, textDecoration: "none" }}>
                       📅 Add "{ev.title}" to Google Calendar
                     </a>
@@ -3482,6 +3398,13 @@ function CreateView() {
   const { form, setForm, formErrors, editingId, setEditingId, setView, handleSave, handlePhotoAdd, removePhoto, fileRef, dashUnlocked } = useApp();
   const hasChanges = form.title.trim() || form.description.trim() || form.location.trim();
 
+  // Warn on browser back/close too — must be before any early returns
+  useEffect(() => {
+    const handler = (e) => { if (hasChanges) { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasChanges]);
+
   // Access guard — only admins can create/edit events
   if (!dashUnlocked) {
     return (
@@ -3504,12 +3427,6 @@ function CreateView() {
     if (hasChanges && !window.confirm("You have unsaved changes. Leave anyway?")) return false;
     return true;
   };
-  // Warn on browser back/close too
-  useEffect(() => {
-    const handler = (e) => { if (hasChanges) { e.preventDefault(); e.returnValue = ""; } };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [hasChanges]);
   return (
     <div style={{ minHeight: "100vh", background: T.bg, padding: "2rem" }}>
       <div style={{ maxWidth: "840px", margin: "0 auto" }}>
