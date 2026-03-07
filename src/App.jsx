@@ -244,6 +244,7 @@ const EMPTY_EVENT_FORM = {
   isPublic: true,
   isPrivate: false,
   privatePassword: "",
+  inviteToken: "",
   recurring: false,
   recurringType: "weekly", // "weekly" | "monthly-date" | "monthly-position"
   recurringDay: "0", // 0=Sun..6=Sat for weekly
@@ -590,6 +591,7 @@ function AppProvider({ children }) {
       isPublic: ev.is_public !== false, // default true
       isPrivate: ev.is_private || false,
       privatePassword: ev.private_password || "",
+      inviteToken: ev.invite_token || "",
       recurring: ev.recurring || false,
       recurringType: ev.recurring_type || "weekly",
       recurringDay: String(ev.recurring_day || "0"),
@@ -969,6 +971,19 @@ function AppProvider({ children }) {
     return (referralStats[eventId] || {})[ref] || 0;
   };
 
+  // ─── PRIVATE EVENT — INVITE LINK ──────────────────────────────────────────
+  const getInviteLink = (ev) => {
+    if (!ev?.inviteToken) return null;
+    const base = window.location.href.split("?")[0].split("#")[0];
+    return `${base}?invite=${ev.inviteToken}`;
+  };
+  const copyInviteLink = async (ev) => {
+    const link = getInviteLink(ev);
+    if (!link) return;
+    try { await navigator.clipboard.writeText(link); showToast("Invite link copied! 🔒 Share it privately."); }
+    catch { showToast("Link: " + link); }
+  };
+
   // ─── BADGES ────────────────────────────────────────────────────────────────
   const BADGE_DEFS = [
     { id: "first_ticket", emoji: "🎟️", name: "First Ticket", desc: "Registered for your first event" },
@@ -1208,6 +1223,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     const params = new URLSearchParams(window.location.search);
     const evParam = params.get("event");
     if (evParam) window.__nhPendingEvent = evParam;
+    const inviteParam = params.get("invite");
+    if (inviteParam) window.__nhInviteToken = inviteParam;
 
     return () => {
       window.removeEventListener("beforeinstallprompt", onInstallPrompt);
@@ -1223,6 +1240,13 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       const evId = window.__nhPendingEvent;
       window.__nhPendingEvent = null;
       const found = events.find(e => e.id === evId || String(e.id) === evId);
+      if (found) { setSelectedId(found.id); setView("detail"); }
+    }
+    // Invite token deep link — find the matching private event and open it
+    if (events.length > 0 && window.__nhInviteToken) {
+      const token = window.__nhInviteToken;
+      window.__nhInviteToken = null;
+      const found = events.find(e => e.inviteToken && e.inviteToken === token);
       if (found) { setSelectedId(found.id); setView("detail"); }
     }
   }, [events]);
@@ -1464,6 +1488,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       is_public: form.isPublic !== false,
       is_private: form.isPrivate || false,
       private_password: form.isPrivate ? (form.privatePassword || "") : "",
+      invite_token: form.isPrivate ? (form.inviteToken || Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10)) : "",
       recurring: form.recurring || false,
       recurring_type: form.recurringType || "weekly",
       recurring_day: parseInt(form.recurringDay) || 0,
@@ -1604,9 +1629,13 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
 
       showToast("Event updated ✓");
     } else {
-      const { data: newEv } = await supabase.from("events").insert({ ...evPayload, registered: 0 });
+      const { data: newEv } = await supabase.from("events").insert({ ...evPayload, registered: 0 }).select();
       const newId = newEv?.[0]?.id;
       if (newId && tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: newId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: parseInt(t.capacity) || 10, sold: 0, sort_order: i })));
+      // If private, store the generated token back in form state so the copy-link UI shows immediately
+      if (form.isPrivate && evPayload.invite_token) {
+        setForm(f => ({ ...f, inviteToken: evPayload.invite_token }));
+      }
       showToast("Event published ✓");
     }
     await loadEvents();
@@ -1621,6 +1650,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       isPublic: ev.isPublic !== false,
       isPrivate: ev.isPrivate || false,
       privatePassword: ev.privatePassword || "",
+      inviteToken: ev.inviteToken || "",
       recurring: ev.recurring || false,
       recurringType: ev.recurringType || "weekly",
       recurringDay: String(ev.recurringDay || "0"),
@@ -1645,6 +1675,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       isPublic: ev.isPublic !== false,
       isPrivate: ev.isPrivate || false,
       privatePassword: ev.privatePassword || "",
+      inviteToken: "", // always generate a fresh token for duplicates
       recurring: ev.recurring || false,
       recurringType: ev.recurringType || "weekly",
       recurringDay: String(ev.recurringDay || "0"),
@@ -1768,7 +1799,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     reviews, qaItems, interests, following, swRegistered,
     loadReviews, submitReview, deleteReview,
     loadQA, submitQuestion, answerQuestion, deleteQuestion,
-    toggleInterest, getInterest, toggleFollow, copyReferralLink, getReferralLink, getReferralCount,
+    toggleInterest, getInterest, toggleFollow, copyReferralLink, getReferralLink, getReferralCount, copyInviteLink, getInviteLink,
     installPrompt, setInstallPrompt, isInstalled, isOnline,
     openCheckout, validateCheckoutInfo, validatePayment, completeOrder,
     handleSave, startEdit, handleDelete, duplicateEvent,
@@ -2949,27 +2980,40 @@ function DetailView() {
   const ev = selectedEvent;
   if (!ev) return null;
 
-  // Private event gate
-  if (ev.isPrivate && ev.privatePassword && !privateUnlocked) {
+  // Check if this page was opened via an invite link token
+  const urlToken = new URLSearchParams(window.location.search).get("invite");
+  const tokenValid = ev.inviteToken && urlToken && ev.inviteToken === urlToken;
+
+  // Private event gate — bypass if valid invite token
+  if (ev.isPrivate && !tokenValid && !privateUnlocked) {
+    // If there's a password, show password form; if invite-only (no password), show locked message
     return (
       <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
         <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "18px", padding: "2.5rem", maxWidth: "420px", width: "100%", textAlign: "center", boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
           <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🔒</div>
           <h2 style={{ color: T.text, fontFamily: "'Lora',serif", margin: "0 0 0.5rem" }}>Private Event</h2>
-          <p style={{ color: T.textSoft, marginBottom: "1.5rem", fontSize: "0.9rem" }}>This event requires a password to view details and purchase tickets.</p>
-          <input
-            type="password"
-            placeholder="Enter event password"
-            value={privateInput}
-            onChange={e => { setPrivateInput(e.target.value); setPrivateError(false); }}
-            onKeyDown={e => { if (e.key === "Enter") { if (privateInput === ev.privatePassword) setPrivateUnlocked(true); else setPrivateError(true); }}}
-            style={{ width: "100%", padding: "12px 14px", borderRadius: "10px", border: `1px solid ${privateError ? T.warn : T.border}`, background: T.cream, fontSize: "0.95rem", boxSizing: "border-box", fontFamily: "inherit", marginBottom: "8px", outline: "none" }}
-          />
-          {privateError && <div style={{ color: T.warn, fontSize: "0.82rem", marginBottom: "8px" }}>⚠ Incorrect password</div>}
-          <button onClick={() => { if (privateInput === ev.privatePassword) setPrivateUnlocked(true); else setPrivateError(true); }}
-            style={{ width: "100%", padding: "12px", background: T.green1, color: "#fff", border: "none", borderRadius: "10px", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: "0.95rem" }}>
-            Unlock Event
-          </button>
+          {ev.privatePassword ? (
+            <>
+              <p style={{ color: T.textSoft, marginBottom: "1.5rem", fontSize: "0.9rem" }}>This event requires a password — or an invite link from the organizer.</p>
+              <input
+                type="password"
+                placeholder="Enter event password"
+                value={privateInput}
+                onChange={e => { setPrivateInput(e.target.value); setPrivateError(false); }}
+                onKeyDown={e => { if (e.key === "Enter") { if (privateInput === ev.privatePassword) setPrivateUnlocked(true); else setPrivateError(true); }}}
+                style={{ width: "100%", padding: "12px 14px", borderRadius: "10px", border: `1px solid ${privateError ? T.warn : T.border}`, background: T.cream, fontSize: "0.95rem", boxSizing: "border-box", fontFamily: "inherit", marginBottom: "8px", outline: "none" }}
+              />
+              {privateError && <div style={{ color: T.warn, fontSize: "0.82rem", marginBottom: "8px" }}>⚠ Incorrect password</div>}
+              <button onClick={() => { if (privateInput === ev.privatePassword) setPrivateUnlocked(true); else setPrivateError(true); }}
+                style={{ width: "100%", padding: "12px", background: T.green1, color: "#fff", border: "none", borderRadius: "10px", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: "0.95rem" }}>
+                Unlock Event
+              </button>
+            </>
+          ) : (
+            <p style={{ color: T.textSoft, marginBottom: "1.5rem", fontSize: "0.9rem", lineHeight: 1.7 }}>
+              This is an invite-only event. You'll need a private invite link from the organizer to view this page.
+            </p>
+          )}
           <button onClick={() => setView("discover")} style={{ marginTop: "10px", background: "none", border: "none", color: T.textSoft, cursor: "pointer", fontFamily: "inherit", fontSize: "0.85rem" }}>← Back to Events</button>
         </div>
       </div>
@@ -3744,10 +3788,28 @@ function CreateView() {
                 </div>
               </div>
               {form.isPrivate && (
-                <div style={{ paddingLeft: "8px" }}>
-                  <Field label="Event Password" error={formErrors.privatePassword}>
-                    <input value={form.privatePassword || ""} onChange={e => setForm({ ...form, privatePassword: e.target.value })} placeholder="Set a password attendees must enter" style={inp(formErrors.privatePassword)} />
+                <div style={{ paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <Field label="Event Password (optional)" error={formErrors.privatePassword}>
+                    <input value={form.privatePassword || ""} onChange={e => setForm({ ...form, privatePassword: e.target.value })} placeholder="Leave blank for invite-link only" style={inp(formErrors.privatePassword)} />
                   </Field>
+                  {form.inviteToken ? (
+                    <div style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "12px 14px" }}>
+                      <div style={{ color: T.textSoft, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>🔗 Invite Link</div>
+                      <div style={{ color: T.textMid, fontSize: "0.78rem", wordBreak: "break-all", marginBottom: "8px", fontFamily: "monospace" }}>
+                        {`${window.location.href.split("?")[0].split("#")[0]}?invite=${form.inviteToken}`}
+                      </div>
+                      <button type="button" onClick={async () => {
+                        const link = `${window.location.href.split("?")[0].split("#")[0]}?invite=${form.inviteToken}`;
+                        try { await navigator.clipboard.writeText(link); alert("Invite link copied!"); } catch { alert("Link: " + link); }
+                      }} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "7px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.78rem" }}>
+                        Copy Link
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ color: T.stoneL, fontSize: "0.78rem", padding: "8px 12px", background: T.cream, borderRadius: "8px" }}>
+                      💡 An invite link will be generated automatically when you save this event.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -4326,7 +4388,7 @@ function DashLoginView() {
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView() {
-  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders } = useApp();
+  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink } = useApp();
   const [dashTab, setDashTab] = useState("events");
   const [archiveSearch, setArchiveSearch] = useState("");
   const [checkinSearch, setCheckinSearch] = useState("");
@@ -4505,6 +4567,9 @@ function DashboardView() {
                   <button onClick={() => startEdit(ev)} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>✏️ Edit</button>
                   <button onClick={() => { if (window.confirm(`Duplicate "${ev.title}"? Dates will be cleared so you can set new ones.`)) duplicateEvent(ev); }} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>⧉ Dupe</button>
                   <button onClick={() => { if (window.confirm(`Send email reminders to all attendees of "${ev.title}"?`)) scheduleEventReminders(ev.id); }} style={{ background: `${T.green1}12`, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>📧 Remind</button>
+                  {ev.isPrivate && ev.inviteToken && (
+                    <button onClick={() => copyInviteLink(ev)} style={{ background: `${T.earth}12`, color: T.earth, border: `1px solid ${T.earthL}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>🔗 Invite Link</button>
+                  )}
                   <button onClick={() => { if (window.confirm("Delete this event?")) handleDelete(ev.id); }} style={{ background: "#FEE2E2", color: T.warn, border: `1px solid #FECACA`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>🗑️</button>
                 </div>
               </div>
