@@ -2462,7 +2462,7 @@ function EventCard({ ev }) {
       <div onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ cursor: "pointer" }}>
         <div style={{ height: "150px", position: "relative", overflow: "hidden" }}>
           {fp ? <img src={fp} alt={ev.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ height: "100%", background: `linear-gradient(135deg,${ev.color}22,${ev.color}66)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3rem" }}>{catEmoji(ev.category)}</div>}
-          <div style={{ position: "absolute", top: "10px", left: "10px", background: ev.color, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.category}</div>
+          <div style={{ position: "absolute", top: "10px", left: "10px", background: ev.isPrivate ? "#6B3FA0" : ev.color, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.isPrivate ? "🔒 Private" : "Public"}</div>
           {/* Interest heart — top right */}
           <button onClick={e => { e.stopPropagation(); toggleInterest(ev.id, isInterested ? "interested" : isGoing ? "going" : "interested"); }}
             title={isGoing ? "Going!" : isInterested ? "Interested" : "Mark interest"}
@@ -4570,16 +4570,19 @@ function DashboardView() {
                   <button onClick={() => startEdit(ev)} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>✏️ Edit</button>
                   <button onClick={() => { if (window.confirm(`Duplicate "${ev.title}"? Dates will be cleared so you can set new ones.`)) duplicateEvent(ev); }} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>⧉ Dupe</button>
                   <button onClick={() => { if (window.confirm(`Send email reminders to all attendees of "${ev.title}"?`)) scheduleEventReminders(ev.id); }} style={{ background: `${T.green1}12`, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>📧 Remind</button>
-                  {ev.isPrivate && ev.inviteToken && (
-                    <button onClick={() => copyInviteLink(ev)} style={{ background: `${T.earth}12`, color: T.earth, border: `1px solid ${T.earthL}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>🔗 Invite Link</button>
-                  )}
-                  {ev.isPrivate && !ev.inviteToken && (
+                  {ev.isPrivate && (
                     <button onClick={async () => {
-                      const token = Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,10);
-                      await supabase.from("events").update({ invite_token: token }).eq("id", ev.id);
-                      await loadEvents();
-                      showToast("Invite link generated! Click 🔗 Invite Link to copy.");
-                    }} style={{ background: `${T.earth}12`, color: T.earth, border: `1px solid ${T.earthL}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>🔗 Generate Link</button>
+                      if (ev.inviteToken) {
+                        copyInviteLink(ev);
+                      } else {
+                        const token = Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,10);
+                        await supabase.from("events").update({ invite_token: token }).eq("id", ev.id);
+                        await loadEvents();
+                        showToast("Invite link generated — click again to copy! 🔗");
+                      }
+                    }} style={{ background: `${T.earth}12`, color: T.earth, border: `1px solid ${T.earthL}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>
+                      🔗 {ev.inviteToken ? "Invite Link" : "Generate Link"}
+                    </button>
                   )}
                   <button onClick={() => { if (window.confirm("Delete this event?")) handleDelete(ev.id); }} style={{ background: "#FEE2E2", color: T.warn, border: `1px solid #FECACA`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>🗑️</button>
                 </div>
