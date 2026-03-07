@@ -589,7 +589,7 @@ function AppProvider({ children }) {
       vendorDeadline: ev.vendor_deadline, vendorInfo: ev.vendor_info,
       profitModel: ev.profit_model, hostPct: ev.host_pct,
       isPublic: ev.is_public !== false, // default true
-      isPrivate: ev.is_private || false,
+      isPrivate: ev.is_private === true || ev.is_private === "true" || false,
       privatePassword: ev.private_password || "",
       inviteToken: ev.invite_token || "",
       recurring: ev.recurring || false,
