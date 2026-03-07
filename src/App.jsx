@@ -3891,9 +3891,14 @@ function MyTicketsView() {
                   </div>
                 </div>
 
-                {/* Status badge */}
-                <div style={{ background: scanModal.checkedIn ? T.green1 : `${T.green1}40`, border: `1px solid ${scanModal.checkedIn ? T.green2 : T.green3}`, borderRadius: "8px", padding: "6px 18px", color: scanModal.checkedIn ? "#fff" : T.green3, fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.04em" }}>
-                  {scanModal.checkedIn ? `✓ CHECKED IN${scanModal.checkinTime ? "  ·  " + scanModal.checkinTime : ""}` : "✓ CONFIRMED — NOT YET CHECKED IN"}
+                {/* Status badges */}
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
+                  <div style={{ background: T.green1, border: `1px solid ${T.green2}`, borderRadius: "8px", padding: "7px 18px", color: "#fff", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.04em" }}>
+                    ✓ CONFIRMED
+                  </div>
+                  <div style={{ background: scanModal.checkedIn ? T.green2 : "#C0392B", border: `1px solid ${scanModal.checkedIn ? T.green3 : "#E74C3C"}`, borderRadius: "8px", padding: "7px 18px", color: "#fff", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.04em" }}>
+                    {scanModal.checkedIn ? `✔ Checked In${scanModal.checkinTime ? "  ·  " + scanModal.checkinTime : ""}` : "✗ Not Checked In"}
+                  </div>
                 </div>
 
                 <button onClick={() => setScanModal(null)} style={{ marginTop: "1.25rem", background: "none", border: "none", color: T.stoneL, cursor: "pointer", fontSize: "0.82rem", fontFamily: "inherit" }}>
@@ -3965,18 +3970,9 @@ function MyTicketsView() {
               const inRefundWindow = daysUntil >= days;
               const showCancel = policy === "full" || policy === "partial" ? inRefundWindow : false;
               return (
-                <div key={ticket.ticketId}
-                  onClick={() => setScanModal(ticket)}
-                  onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 20px rgba(44,106,79,0.18)"}
-                  onMouseLeave={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.06)"}
-                  style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", cursor: "pointer", transition: "box-shadow 0.15s" }}>
-                  {/* Tap-to-scan hint */}
-                  <div style={{ background: `linear-gradient(90deg, ${T.green1}18, ${T.green2}10)`, borderBottom: `1px solid ${T.green4}40`, padding: "6px 20px", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "0.7rem" }}>📲</span>
-                    <span style={{ color: T.green1, fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.04em" }}>Tap to view full QR for scanning</span>
-                  </div>
+                <div key={ticket.ticketId} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
                   {/* Ticket header */}
-                  <div style={{ display: "flex" }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: "flex" }}>
                     <div style={{ width: "8px", background: ev?.color || T.green1, flexShrink: 0 }} />
                     <div style={{ padding: "18px 20px", flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                       <div style={{ flex: 1, minWidth: "180px" }}>
@@ -3986,8 +3982,13 @@ function MyTicketsView() {
                         {ev && <div style={{ color: T.textSoft, fontSize: "0.8rem" }}>📍 {ev.location}</div>}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-                        <div style={{ background: ticket.checkedIn ? T.green1 : T.green5, border: `1px solid ${ticket.checkedIn ? T.green2 : T.green3}`, borderRadius: "6px", padding: "3px 10px", color: ticket.checkedIn ? "#fff" : T.green1, fontSize: "0.72rem", fontWeight: 700 }}>
-                          {ticket.checkedIn ? `✓ CHECKED IN ${ticket.checkinTime ? "· " + ticket.checkinTime : ""}` : "✓ CONFIRMED"}
+                        {/* Confirmed badge — always green */}
+                        <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "6px", padding: "3px 10px", color: T.green1, fontSize: "0.72rem", fontWeight: 700 }}>
+                          ✓ CONFIRMED
+                        </div>
+                        {/* Check-in badge — red if not checked in, green if checked in */}
+                        <div style={{ background: ticket.checkedIn ? T.green1 : "#FEE2E2", border: `1px solid ${ticket.checkedIn ? T.green2 : "#FECACA"}`, borderRadius: "6px", padding: "3px 10px", color: ticket.checkedIn ? "#fff" : T.warn, fontSize: "0.72rem", fontWeight: 700 }}>
+                          {ticket.checkedIn ? `✔ Checked In${ticket.checkinTime ? "  ·  " + ticket.checkinTime : ""}` : "✗ Not Checked In"}
                         </div>
                         <div style={{ color: T.textSoft, fontSize: "0.78rem" }}>{ticket.qty} ticket{ticket.qty > 1 ? "s" : ""} · {ticket.total === 0 ? "Free" : `$${ticket.total.toFixed(2)}`}</div>
                       </div>
@@ -3995,7 +3996,7 @@ function MyTicketsView() {
                   </div>
 
                   {/* QR code + details — always visible */}
-                  <div onClick={e => e.stopPropagation()} style={{ borderTop: `1px dashed ${T.border}`, padding: "20px 24px", background: T.cream, display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start" }}>
+                  <div style={{ borderTop: `1px dashed ${T.border}`, padding: "20px 24px", background: T.cream, display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start" }}>
                     {/* QR Code */}
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                       <div style={{ background: "#fff", border: `2px solid ${T.border}`, borderRadius: "12px", padding: "12px" }}>
@@ -4015,6 +4016,13 @@ function MyTicketsView() {
                         ))}
                       </div>
                       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        {/* Tap to View Ticket button */}
+                        <button onClick={() => setScanModal(ticket)}
+                          onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg,${T.green2},${T.green3})`; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg,${T.green1},${T.green2})`; }}
+                          style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "8px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                          🎟️ Tap to View Ticket
+                        </button>
                         {ev && (
                           <button onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>View Event →</button>
                         )}
