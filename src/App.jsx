@@ -716,12 +716,13 @@ function AppProvider({ children }) {
   const checkinAttendee = async (evId, ticketId) => {
     const now = new Date().toISOString();
     await supabase.from("tickets").update({ checked_in: true, checkin_time: now }).eq("id", ticketId);
-    setMyTickets(prev => prev.map(t => t.ticketId === ticketId ? { ...t, checkedIn: true, checkinTime: new Date().toLocaleTimeString() } : t));
+    // ticketId here is the UUID row id — match against t.id (not t.ticketId which is TKT-xxx)
+    setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, checkedIn: true, checkinTime: new Date().toLocaleTimeString() } : t));
     showToast("✅ Attendee checked in!");
   };
   const undoCheckin = async (ticketId) => {
     await supabase.from("tickets").update({ checked_in: false, checkin_time: null }).eq("id", ticketId);
-    setMyTickets(prev => prev.map(t => t.ticketId === ticketId ? { ...t, checkedIn: false, checkinTime: null } : t));
+    setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, checkedIn: false, checkinTime: null } : t));
     showToast("Check-in undone.", "warn");
   };
 
@@ -1306,7 +1307,13 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         checkinTime: null,
       }));
 
-      setMyTickets(prev => [...prev, ...newTickets]);
+      // Reload tickets from DB to get the real UUID `id` for each row
+      // (ticketInserts only has ticket_id / TKT-xxx, not the DB-assigned UUID)
+      if (currentUser?.id) {
+        await loadMyTickets(currentUser.id);
+      } else {
+        setMyTickets(prev => [...prev, ...newTickets]);
+      }
 
       // Send confirmation email via Resend if API key is configured
       const rKey = localStorage.getItem("nh_resend_key");
