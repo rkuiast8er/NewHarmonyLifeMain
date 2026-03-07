@@ -2415,11 +2415,9 @@ function EventCard({ ev }) {
 
 // ─── NAVBAR ───────────────────────────────────────────────────────────────────
 function Navbar() {
-  const { view, setView, cart, setCartOpen, currentUser, dashUnlocked, handleLogout, openAuth } = useApp();
+  const { view, setView, cart, setCartOpen, currentUser, handleLogout, openAuth } = useApp();
   const cartCount = cart.reduce((s, item) => s + item.qty, 0);
-  // Only show Dashboard link if already unlocked; otherwise users can access it via footer/settings
   const navLinks = [["discover", "Discover"], ["mytickets", "My Tickets"]];
-  if (dashUnlocked) navLinks.push(["dashboard", "Dashboard"]);
   return (
     <nav style={{ background: T.bgDeep, padding: "0 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: "68px", position: "sticky", top: 0, zIndex: 200, boxShadow: "0 2px 12px rgba(0,0,0,0.18)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", minWidth: 0 }}>
@@ -2438,12 +2436,6 @@ function Navbar() {
                 {l}
               </button>
             ))}
-            {!dashUnlocked && (
-              <button onClick={() => setView("dashlogin")}
-                style={{ background: "none", border: "none", color: "rgba(156,163,175,0.5)", cursor: "pointer", fontSize: "0.72rem", padding: "4px 0", borderBottom: "2px solid transparent", fontFamily: "inherit", whiteSpace: "nowrap" }}>
-                Admin
-              </button>
-            )}
           </div>
           {/* Fade-out on right edge to hint at scroll */}
           <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "20px", background: `linear-gradient(to right, transparent, ${T.bgDeep})`, pointerEvents: "none" }} />
@@ -3752,7 +3744,6 @@ function CreateView() {
 // ─── MY TICKETS VIEW ──────────────────────────────────────────────────────────
 function MyTicketsView() {
   const { myTickets, events, currentUser, setView, openAuth, setSelectedId, cancelTicket, showToast, updateProfile, handleLogout, interests, getInterest, following, toggleFollow, referralStats, computeBadges, BADGE_DEFS } = useApp();
-  const [expandedTicket, setExpandedTicket] = useState(null);
   const [cancelConfirm, setCancelConfirm] = useState(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ firstName: "", lastName: "", phone: "", city: "", state: "" });
@@ -3913,10 +3904,15 @@ function MyTicketsView() {
           <div style={{ display: activeTab === "tickets" ? "grid" : "none", gap: "16px" }}>
             {activeTickets.map((ticket) => {
               const ev = events.find(e => e.id === ticket.eventId);
-              const isExpanded = expandedTicket === ticket.ticketId;
+              // Determine if Cancel button should be shown based on refund policy
+              const policy = ev?.refundPolicy || "none";
+              const days = ev?.refundDeadlineDays ?? 7;
+              const daysUntil = ev?.startDate ? Math.ceil((new Date(ev.startDate) - new Date()) / (1000*60*60*24)) : 999;
+              const inRefundWindow = daysUntil >= days;
+              const showCancel = policy === "full" || policy === "partial" ? inRefundWindow : false;
               return (
                 <div key={ticket.ticketId} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-                  {/* Ticket header row */}
+                  {/* Ticket header */}
                   <div style={{ display: "flex" }}>
                     <div style={{ width: "8px", background: ev?.color || T.green1, flexShrink: 0 }} />
                     <div style={{ padding: "18px 20px", flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
@@ -3931,43 +3927,40 @@ function MyTicketsView() {
                           {ticket.checkedIn ? `✓ CHECKED IN ${ticket.checkinTime ? "· " + ticket.checkinTime : ""}` : "✓ CONFIRMED"}
                         </div>
                         <div style={{ color: T.textSoft, fontSize: "0.78rem" }}>{ticket.qty} ticket{ticket.qty > 1 ? "s" : ""} · {ticket.total === 0 ? "Free" : `$${ticket.total.toFixed(2)}`}</div>
-                        <button onClick={() => setExpandedTicket(isExpanded ? null : ticket.ticketId)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.textSoft, borderRadius: "6px", padding: "4px 12px", cursor: "pointer", fontSize: "0.75rem", fontFamily: "inherit" }}>
-                          {isExpanded ? "Hide QR ▲" : "Show QR & Details ▼"}
-                        </button>
                       </div>
                     </div>
                   </div>
 
-                  {/* Expanded: QR code + details + cancel */}
-                  {isExpanded && (
-                    <div style={{ borderTop: `1px dashed ${T.border}`, padding: "20px 24px", background: T.cream, display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start" }}>
-                      {/* QR Code */}
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-                        <div style={{ background: "#fff", border: `2px solid ${T.border}`, borderRadius: "12px", padding: "12px" }}>
-                          <QRCode value={ticket.ticketId} size={100} />
-                        </div>
-                        <div style={{ color: T.stoneL, fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.08em", textAlign: "center" }}>SCAN AT ENTRY</div>
+                  {/* QR code + details — always visible */}
+                  <div style={{ borderTop: `1px dashed ${T.border}`, padding: "20px 24px", background: T.cream, display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start" }}>
+                    {/* QR Code */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                      <div style={{ background: "#fff", border: `2px solid ${T.border}`, borderRadius: "12px", padding: "12px" }}>
+                        <QRCode value={ticket.ticketId} size={100} />
                       </div>
+                      <div style={{ color: T.stoneL, fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.08em", textAlign: "center" }}>SCAN AT ENTRY</div>
+                    </div>
 
-                      {/* Ticket details */}
-                      <div style={{ flex: 1, minWidth: "180px" }}>
-                        <div style={{ display: "grid", gap: "6px", marginBottom: "14px" }}>
-                          {[["Ticket ID", ticket.ticketId], ["Order", ticket.orderNum], ["Booked", ticket.bookedOn], ["Attendee", ticket.buyerName], ["Email", ticket.buyerEmail]].map(([label, val]) => (
-                            <div key={label} style={{ display: "flex", gap: "8px", fontSize: "0.78rem" }}>
-                              <span style={{ color: T.stoneL, fontWeight: 600, minWidth: "60px" }}>{label}</span>
-                              <span style={{ color: T.textMid, wordBreak: "break-all" }}>{val}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                          {ev && (
-                            <button onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>View Event →</button>
-                          )}
+                    {/* Ticket details */}
+                    <div style={{ flex: 1, minWidth: "180px" }}>
+                      <div style={{ display: "grid", gap: "6px", marginBottom: "14px" }}>
+                        {[["Ticket ID", ticket.ticketId], ["Order", ticket.orderNum], ["Booked", ticket.bookedOn], ["Attendee", ticket.buyerName], ["Email", ticket.buyerEmail]].map(([label, val]) => (
+                          <div key={label} style={{ display: "flex", gap: "8px", fontSize: "0.78rem" }}>
+                            <span style={{ color: T.stoneL, fontWeight: 600, minWidth: "60px" }}>{label}</span>
+                            <span style={{ color: T.textMid, wordBreak: "break-all" }}>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        {ev && (
+                          <button onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>View Event →</button>
+                        )}
+                        {showCancel && (
                           <button onClick={() => setCancelConfirm(ticket)} style={{ background: "#FEF2F2", color: T.warn, border: `1px solid #FECACA`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>Cancel Ticket</button>
-                        </div>
+                        )}
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               );
             })}
@@ -4101,8 +4094,22 @@ function MyTicketsView() {
   );
 }
 function DashLoginView() {
-  const { pwInput, setPwInput, pwError, setPwError, setDashUnlocked, setView } = useApp();
+  const { pwInput, setPwInput, pwError, setPwError, setDashUnlocked, setView, currentUser } = useApp();
   const unlock = () => { if (pwInput === ADMIN_PASSWORD) { setDashUnlocked(true); setPwInput(""); setView("dashboard"); } else setPwError(true); };
+
+  // Guests (not logged in) cannot access the admin login
+  if (!currentUser) {
+    return (
+      <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "20px", padding: "3rem", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 8px 40px rgba(0,0,0,0.08)" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🔒</div>
+          <h2 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.4rem", margin: "0 0 0.75rem" }}>Sign In Required</h2>
+          <p style={{ color: T.textSoft, fontSize: "0.88rem", margin: "0 0 1.5rem" }}>You must be signed in to access the admin area.</p>
+          <button onClick={() => setView("discover")} style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "10px", padding: "11px 24px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.95rem" }}>← Back to Discover</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "20px", padding: "3rem", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 8px 40px rgba(0,0,0,0.08)" }}>
@@ -4841,7 +4848,7 @@ function MobileBottomNav() {
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
 function Footer() {
-  const { view, setView, dashUnlocked } = useApp();
+  const { view, setView, dashUnlocked, currentUser } = useApp();
   // Don't show footer on full-screen views
   if (["checkout", "dashlogin", "dashboard"].includes(view)) return null;
   return (
@@ -4871,20 +4878,22 @@ function Footer() {
         {/* Info */}
         <div>
           <div style={{ color: T.green4, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "10px" }}>Info</div>
-          <div style={{ color: T.stoneL, fontSize: "0.82rem", marginBottom: "6px" }}>📍 Sioux City, IA area</div>
+          <div style={{ color: T.stoneL, fontSize: "0.82rem", marginBottom: "6px" }}>📍 Castana, IA</div>
           <div style={{ color: T.stoneL, fontSize: "0.82rem" }}>🌱 Loess Hills Region</div>
         </div>
-        {/* Admin */}
-        <div>
-          <div style={{ color: T.green4, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "10px" }}>Admin</div>
-          {dashUnlocked
-            ? <button onClick={() => setView("dashboard")} style={{ background: `${T.green1}25`, border: `1px solid ${T.green1}40`, color: T.green3, borderRadius: "6px", padding: "5px 12px", cursor: "pointer", fontSize: "0.78rem", fontFamily: "inherit", fontWeight: 600 }}>⚙️ Dashboard</button>
-            : <button onClick={() => setView("dashlogin")} style={{ background: "none", border: `1px solid rgba(255,255,255,0.1)`, color: T.stoneL, borderRadius: "6px", padding: "5px 12px", cursor: "pointer", fontSize: "0.78rem", fontFamily: "inherit" }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)"} onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"}>
-                🔒 Admin Login
-              </button>
-          }
-        </div>
+        {/* Admin — only visible to logged-in users */}
+        {currentUser && (
+          <div>
+            <div style={{ color: T.green4, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "10px" }}>Admin</div>
+            {dashUnlocked
+              ? <button onClick={() => setView("dashboard")} style={{ background: `${T.green1}25`, border: `1px solid ${T.green1}40`, color: T.green3, borderRadius: "6px", padding: "5px 12px", cursor: "pointer", fontSize: "0.78rem", fontFamily: "inherit", fontWeight: 600 }}>⚙️ Dashboard</button>
+              : <button onClick={() => setView("dashlogin")} style={{ background: "none", border: `1px solid rgba(255,255,255,0.1)`, color: T.stoneL, borderRadius: "6px", padding: "5px 12px", cursor: "pointer", fontSize: "0.78rem", fontFamily: "inherit" }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)"} onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"}>
+                  🔒 Admin Login
+                </button>
+            }
+          </div>
+        )}
       </div>
       <div style={{ maxWidth: "1060px", margin: "2rem auto 0", paddingTop: "1.5rem", borderTop: `1px solid rgba(255,255,255,0.06)`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
         <div style={{ color: "rgba(156,163,175,0.5)", fontSize: "0.72rem" }}>© {new Date().getFullYear()} New Harmony Life · All rights reserved</div>
