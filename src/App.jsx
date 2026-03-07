@@ -3235,7 +3235,8 @@ function PaymentStep() {
 
 // ─── CHECKOUT VIEW ────────────────────────────────────────────────────────────
 function CheckoutView() {
-  const { cart, cartTotal, checkoutInfo, setCheckoutInfo, checkoutErrors, checkoutStep, setCheckoutStep, validateCheckoutInfo, completeOrder, orderComplete, setView, currentUser, openAuth } = useApp();
+  const { cart, cartTotal, checkoutInfo, setCheckoutInfo, checkoutErrors, checkoutStep, setCheckoutStep, validateCheckoutInfo, completeOrder, orderComplete, setView, setCartOpen, currentUser, openAuth, events } = useApp();
+  const [customAnswers, setCustomAnswers] = React.useState({});
   const onlyFree = cartTotal === 0;
   const steps = [{ n: 1, label: "Your Info" }, { n: 2, label: onlyFree ? "Confirm" : "Payment" }, { n: 3, label: "Done!" }];
   return (
@@ -3397,6 +3398,13 @@ function CreateView() {
   const { form, setForm, formErrors, editingId, setEditingId, setView, handleSave, handlePhotoAdd, removePhoto, fileRef, dashUnlocked } = useApp();
   const hasChanges = form.title.trim() || form.description.trim() || form.location.trim();
 
+  // Warn on browser back/close too — must be before any early returns
+  useEffect(() => {
+    const handler = (e) => { if (hasChanges) { e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasChanges]);
+
   // Access guard — only admins can create/edit events
   if (!dashUnlocked) {
     return (
@@ -3419,12 +3427,6 @@ function CreateView() {
     if (hasChanges && !window.confirm("You have unsaved changes. Leave anyway?")) return false;
     return true;
   };
-  // Warn on browser back/close too
-  useEffect(() => {
-    const handler = (e) => { if (hasChanges) { e.preventDefault(); e.returnValue = ""; } };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [hasChanges]);
   return (
     <div style={{ minHeight: "100vh", background: T.bg, padding: "2rem" }}>
       <div style={{ maxWidth: "840px", margin: "0 auto" }}>
