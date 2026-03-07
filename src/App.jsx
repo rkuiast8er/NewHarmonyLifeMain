@@ -1629,7 +1629,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
 
       showToast("Event updated ✓");
     } else {
-      const { data: newEv } = await supabase.from("events").insert({ ...evPayload, registered: 0 }).select();
+      const { data: newEv } = await supabase.from("events").insert({ ...evPayload, registered: 0 });
       const newId = newEv?.[0]?.id;
       if (newId && tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: newId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: parseInt(t.capacity) || 10, sold: 0, sort_order: i })));
       // If private, store the generated token back in form state so the copy-link UI shows immediately
@@ -1749,7 +1749,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
   const visibleEvents = activeEvents.filter(ev => {
     // Private events are never shown in the public discover feed
     // They're only accessible via direct invite link or password
-    if (ev.isPrivate) return false;
+    if (ev.isPrivate === true) return false;
     // Non-logged-in users only see public events
     if (!currentUser && ev.isPublic === false) return false;
     return true;
