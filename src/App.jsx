@@ -1762,7 +1762,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     const wk = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
     const mo = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
     const md = filterDate === "all" ? true : filterDate === "today" ? ev.startDate <= today && (ev.endDate || ev.startDate) >= today : filterDate === "week" ? ev.startDate <= wk && (ev.endDate || ev.startDate) >= today : filterDate === "month" ? ev.startDate <= mo && (ev.endDate || ev.startDate) >= today : true;
-    const lowestPrice = ev.ticketTiers ? Math.min(...ev.ticketTiers.map(t => t.price)) : 0;
+    const lowestPrice = ev.ticketTiers && ev.ticketTiers.length > 0 ? Math.min(...ev.ticketTiers.map(t => t.price)) : 0;
     const mp = filterPrice === "all" ? true : filterPrice === "free" ? lowestPrice === 0 : lowestPrice > 0;
     const mv = filterVibe.length === 0 ? true : filterVibe.every(v => (ev.vibeTags || []).includes(v));
     return ms && mc && md && mp && mv;
@@ -2444,7 +2444,7 @@ function EventCard({ ev }) {
   const sold = totalSold(ev);
   const pctFull = cap > 0 ? Math.min(100, Math.round((sold / cap) * 100)) : 0;
   const almostFull = spots > 0 && spots <= 10;
-  const lowestPrice = ev.ticketTiers ? Math.min(...ev.ticketTiers.map(t => t.price)) : (ev.price || 0);
+  const lowestPrice = ev.ticketTiers && ev.ticketTiers.length > 0 ? Math.min(...ev.ticketTiers.map(t => t.price)) : (ev.price || 0);
   const firstTier = ev.ticketTiers?.[0];
   const shortDesc = ev.description && ev.description.length > 100 ? ev.description.slice(0, 97) + "…" : ev.description;
   const intr = getInterest(ev.id);
