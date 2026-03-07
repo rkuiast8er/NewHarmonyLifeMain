@@ -3745,6 +3745,7 @@ function CreateView() {
 function MyTicketsView() {
   const { myTickets, events, currentUser, setView, openAuth, setSelectedId, cancelTicket, showToast, updateProfile, handleLogout, interests, getInterest, following, toggleFollow, referralStats, computeBadges, BADGE_DEFS } = useApp();
   const [cancelConfirm, setCancelConfirm] = useState(null);
+  const [scanModal, setScanModal] = useState(null); // ticket object for full-screen QR view
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ firstName: "", lastName: "", phone: "", city: "", state: "" });
   const [activeTab, setActiveTab] = useState("tickets");
@@ -3850,6 +3851,59 @@ function MyTicketsView() {
           </div>
         )}
 
+        {/* ── FULL-SCREEN TICKET SCAN MODAL ── */}
+        {scanModal && (() => {
+          const ev = events.find(e => e.id === scanModal.eventId);
+          return (
+            <div onClick={() => setScanModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 700, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: T.bgDeep, borderRadius: "24px", padding: "2rem 2rem 1.75rem", width: "100%", maxWidth: "360px", display: "flex", flexDirection: "column", alignItems: "center", gap: "0", boxShadow: "0 30px 80px rgba(0,0,0,0.6)", border: `1px solid rgba(116,198,157,0.2)` }}>
+                {/* Header */}
+                <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+                  <div>
+                    <div style={{ color: "#fff", fontFamily: "'Lora',serif", fontWeight: 700, fontSize: "1.05rem", lineHeight: 1.2 }}>{scanModal.eventTitle}</div>
+                    <div style={{ color: T.green3, fontSize: "0.78rem", fontWeight: 600, marginTop: "2px" }}>{scanModal.tierName}</div>
+                  </div>
+                  <button onClick={() => setScanModal(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: "50%", width: "34px", height: "34px", cursor: "pointer", color: "#fff", fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
+                </div>
+
+                {/* Large QR Code */}
+                <div style={{ background: "#fff", borderRadius: "16px", padding: "16px", marginBottom: "1rem", boxShadow: "0 0 0 6px rgba(116,198,157,0.15)" }}>
+                  <QRCode value={scanModal.ticketId} size={220} />
+                </div>
+
+                {/* Scan label */}
+                <div style={{ color: T.green3, fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.25rem" }}>📲 Present for scanning at entry</div>
+
+                {/* Ticket details */}
+                <div style={{ width: "100%", background: "rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px 16px", marginBottom: "1rem" }}>
+                  <div style={{ display: "grid", gap: "7px" }}>
+                    {[
+                      ["Ticket ID", scanModal.ticketId],
+                      ["Attendee", scanModal.buyerName],
+                      ["Qty", `${scanModal.qty} ticket${scanModal.qty > 1 ? "s" : ""}`],
+                      ...(ev ? [["Date", dateRange(ev)], ["Location", ev.location]] : []),
+                    ].map(([label, val]) => (
+                      <div key={label} style={{ display: "flex", gap: "10px", fontSize: "0.78rem" }}>
+                        <span style={{ color: T.stoneL, fontWeight: 600, minWidth: "70px", flexShrink: 0 }}>{label}</span>
+                        <span style={{ color: "#fff", wordBreak: "break-all" }}>{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Status badge */}
+                <div style={{ background: scanModal.checkedIn ? T.green1 : `${T.green1}40`, border: `1px solid ${scanModal.checkedIn ? T.green2 : T.green3}`, borderRadius: "8px", padding: "6px 18px", color: scanModal.checkedIn ? "#fff" : T.green3, fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.04em" }}>
+                  {scanModal.checkedIn ? `✓ CHECKED IN${scanModal.checkinTime ? "  ·  " + scanModal.checkinTime : ""}` : "✓ CONFIRMED — NOT YET CHECKED IN"}
+                </div>
+
+                <button onClick={() => setScanModal(null)} style={{ marginTop: "1.25rem", background: "none", border: "none", color: T.stoneL, cursor: "pointer", fontSize: "0.82rem", fontFamily: "inherit" }}>
+                  ← Back to My Tickets
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {cancelConfirm && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
             <div style={{ background: T.bgCard, borderRadius: "16px", padding: "2rem", maxWidth: "400px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
@@ -3911,9 +3965,18 @@ function MyTicketsView() {
               const inRefundWindow = daysUntil >= days;
               const showCancel = policy === "full" || policy === "partial" ? inRefundWindow : false;
               return (
-                <div key={ticket.ticketId} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+                <div key={ticket.ticketId}
+                  onClick={() => setScanModal(ticket)}
+                  onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 20px rgba(44,106,79,0.18)"}
+                  onMouseLeave={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.06)"}
+                  style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", cursor: "pointer", transition: "box-shadow 0.15s" }}>
+                  {/* Tap-to-scan hint */}
+                  <div style={{ background: `linear-gradient(90deg, ${T.green1}18, ${T.green2}10)`, borderBottom: `1px solid ${T.green4}40`, padding: "6px 20px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "0.7rem" }}>📲</span>
+                    <span style={{ color: T.green1, fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.04em" }}>Tap to view full QR for scanning</span>
+                  </div>
                   {/* Ticket header */}
-                  <div style={{ display: "flex" }}>
+                  <div style={{ display: "flex" }} onClick={e => e.stopPropagation()}>
                     <div style={{ width: "8px", background: ev?.color || T.green1, flexShrink: 0 }} />
                     <div style={{ padding: "18px 20px", flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                       <div style={{ flex: 1, minWidth: "180px" }}>
@@ -3932,7 +3995,7 @@ function MyTicketsView() {
                   </div>
 
                   {/* QR code + details — always visible */}
-                  <div style={{ borderTop: `1px dashed ${T.border}`, padding: "20px 24px", background: T.cream, display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start" }}>
+                  <div onClick={e => e.stopPropagation()} style={{ borderTop: `1px dashed ${T.border}`, padding: "20px 24px", background: T.cream, display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start" }}>
                     {/* QR Code */}
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                       <div style={{ background: "#fff", border: `2px solid ${T.border}`, borderRadius: "12px", padding: "12px" }}>
