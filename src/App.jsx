@@ -1747,6 +1747,9 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
 
   // ─── FILTERED EVENTS ───────────────────────────────────────────────────────
   const visibleEvents = activeEvents.filter(ev => {
+    // Private events are never shown in the public discover feed
+    // They're only accessible via direct invite link or password
+    if (ev.isPrivate) return false;
     // Non-logged-in users only see public events
     if (!currentUser && ev.isPublic === false) return false;
     return true;
