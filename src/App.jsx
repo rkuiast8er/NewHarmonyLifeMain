@@ -2715,6 +2715,7 @@ function DiscoverView() {
             </button>
           );
         })}
+      </div>
       <div style={{ padding: "1rem 2rem 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
         <div style={{ color: T.textSoft, fontSize: "0.85rem" }}>
           {filteredEvents.length} event{filteredEvents.length !== 1 ? "s" : ""} found
