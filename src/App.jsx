@@ -12,6 +12,12 @@ if (typeof window !== "undefined" && !window.jsQR) {
   s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
   document.head.appendChild(s);
 }
+// Load Recharts for analytics charts
+if (typeof window !== "undefined" && !window.Recharts) {
+  const s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.min.js";
+  document.head.appendChild(s);
+}
 
 const SUPABASE_URL = "https://eaiutiqyrggihrunezjc.supabase.co";
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhaXV0aXF5cmdnaWhydW5lempjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MDM5NDgsImV4cCI6MjA4ODM3OTk0OH0.zbtmgrt4ou1JxMe4O5givGu-Z1W42I__quQD2Z4aa2o";
@@ -125,6 +131,21 @@ const CATEGORIES = [
   "Arts & Crafts", "Wellness", "Sports & Nature", "Charity", "Other",
 ];
 
+const VIBE_TAGS = [
+  { id: "dog-friendly",   emoji: "🐾", label: "Dog-Friendly" },
+  { id: "kid-friendly",   emoji: "👶", label: "Kid-Friendly" },
+  { id: "bring-a-blanket",emoji: "🧺", label: "Bring a Blanket" },
+  { id: "limited-spots",  emoji: "⚡", label: "Limited Spots" },
+  { id: "rain-or-shine",  emoji: "🌦️", label: "Rain or Shine" },
+  { id: "all-ages",       emoji: "👨‍👩‍👧", label: "All Ages" },
+  { id: "21-plus",        emoji: "🍺", label: "21+" },
+  { id: "outdoors",       emoji: "🌿", label: "Outdoors" },
+  { id: "indoor",         emoji: "🏠", label: "Indoor" },
+  { id: "free-parking",   emoji: "🅿️", label: "Free Parking" },
+  { id: "wheelchair",     emoji: "♿", label: "Accessible" },
+  { id: "bring-your-own", emoji: "🎒", label: "Bring Your Own" },
+];
+
 const ADMIN_PASSWORD = process.env.REACT_APP_ADMIN_PASSWORD || "harmony2026";
 
 const VENDOR_TYPES = [
@@ -231,6 +252,7 @@ const EMPTY_EVENT_FORM = {
   recurringWeekDay: "5", // 0-6 for monthly-position
   recurringEndDate: "",
   customQuestions: [], // [{id, label, type: "text"|"select"|"checkbox", options: [], required: false}]
+  vibeTags: [],       // array of VIBE_TAGS ids
   refundPolicy: "none", // "none" | "partial" | "full"
   refundDeadlineDays: 7, // days before event for partial/full refunds
 };
@@ -379,7 +401,47 @@ const initials = (u) => {
   return `${first[0] || ""}${last[0] || ""}`.toUpperCase();
 };
 
-// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+// ─── COUNTDOWN TIMER ──────────────────────────────────────────────────────────
+function CountdownTimer({ ev }) {
+  const calcTime = () => {
+    const target = new Date(`${ev.startDate}T${ev.time || "00:00"}:00`);
+    const diff = target - Date.now();
+    if (diff <= 0) return null;
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    return { d, h, m, s, diff };
+  };
+  const [time, setTime] = useState(calcTime);
+  useEffect(() => {
+    const interval = setInterval(() => setTime(calcTime()), 1000);
+    return () => clearInterval(interval);
+  }, [ev.startDate, ev.time]);
+  if (!time) return null;
+  const Box = ({ val, label }) => (
+    <div style={{ textAlign: "center", minWidth: "52px" }}>
+      <div style={{ background: T.bgDeep, color: T.green3, borderRadius: "10px", padding: "10px 8px", fontFamily: "'Lora',serif", fontSize: "1.6rem", fontWeight: 700, lineHeight: 1, minWidth: "52px" }}>{String(val).padStart(2, "0")}</div>
+      <div style={{ color: T.stoneL, fontSize: "0.65rem", marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
+    </div>
+  );
+  return (
+    <div style={{ background: `linear-gradient(135deg,${T.bgDeep},${T.bgMid})`, borderRadius: "14px", padding: "16px 20px", marginBottom: "18px", border: `1px solid ${T.green1}30` }}>
+      <div style={{ color: T.green4, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "12px" }}>⏳ Event Starts In</div>
+      <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "center" }}>
+        {time.d > 0 && <Box val={time.d} label="Days" />}
+        {time.d > 0 && <div style={{ color: T.green3, fontSize: "1.4rem", fontWeight: 300, marginBottom: "18px" }}>:</div>}
+        <Box val={time.h} label="Hours" />
+        <div style={{ color: T.green3, fontSize: "1.4rem", fontWeight: 300, marginBottom: "18px" }}>:</div>
+        <Box val={time.m} label="Min" />
+        <div style={{ color: T.green3, fontSize: "1.4rem", fontWeight: 300, marginBottom: "18px" }}>:</div>
+        <Box val={time.s} label="Sec" />
+      </div>
+    </div>
+  );
+}
+
+
 const inp = (err) => ({
   width: "100%", padding: "11px 14px", background: T.cream,
   border: `1px solid ${err ? T.warn : T.border}`, borderRadius: "10px",
@@ -425,6 +487,7 @@ function AppProvider({ children }) {
   const [filterCat, setFilterCat] = useState("All");
   const [filterDate, setFilterDate] = useState("all");
   const [filterPrice, setFilterPrice] = useState("all");
+  const [filterVibe, setFilterVibe] = useState([]);
   const [myTickets, setMyTickets] = useState([]);
   const [toast, setToast] = useState(null);
   const [registerQty, setRegQty] = useState(1);
@@ -535,6 +598,7 @@ function AppProvider({ children }) {
       recurringWeekDay: String(ev.recurring_week_day || "5"),
       recurringEndDate: ev.recurring_end_date || "",
       customQuestions: ev.custom_questions || [],
+      vibeTags: ev.vibe_tags || [],
       refundPolicy: ev.refund_policy || "none",
       refundDeadlineDays: ev.refund_deadline_days ?? 7,
       ticketTiers: (tiers || []).filter(t => t.event_id === ev.id).map(t => ({
@@ -1408,6 +1472,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       recurring_week_day: parseInt(form.recurringWeekDay) || 5,
       recurring_end_date: form.recurringEndDate || null,
       custom_questions: form.customQuestions || [],
+      vibe_tags: form.vibeTags || [],
       refund_policy: form.refundPolicy || "none",
       refund_deadline_days: parseInt(form.refundDeadlineDays) || 7,
     };
@@ -1564,6 +1629,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       recurringWeekDay: String(ev.recurringWeekDay || "5"),
       recurringEndDate: ev.recurringEndDate || "",
       customQuestions: ev.customQuestions || [],
+      vibeTags: ev.vibeTags || [],
       refundPolicy: ev.refundPolicy || "none",
       refundDeadlineDays: ev.refundDeadlineDays ?? 7,
     });
@@ -1587,6 +1653,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       recurringWeekDay: String(ev.recurringWeekDay || "5"),
       recurringEndDate: ev.recurringEndDate || "",
       customQuestions: ev.customQuestions || [],
+      vibeTags: ev.vibeTags || [],
       refundPolicy: ev.refundPolicy || "none",
       refundDeadlineDays: ev.refundDeadlineDays ?? 7,
       startDate: "", endDate: "", // Clear dates so admin sets new ones
@@ -1663,7 +1730,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     const md = filterDate === "all" ? true : filterDate === "today" ? ev.startDate <= today && (ev.endDate || ev.startDate) >= today : filterDate === "week" ? ev.startDate <= wk && (ev.endDate || ev.startDate) >= today : filterDate === "month" ? ev.startDate <= mo && (ev.endDate || ev.startDate) >= today : true;
     const lowestPrice = ev.ticketTiers ? Math.min(...ev.ticketTiers.map(t => t.price)) : 0;
     const mp = filterPrice === "all" ? true : filterPrice === "free" ? lowestPrice === 0 : lowestPrice > 0;
-    return ms && mc && md && mp;
+    const mv = filterVibe.length === 0 ? true : filterVibe.every(v => (ev.vibeTags || []).includes(v));
+    return ms && mc && md && mp && mv;
   }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
 
   // ─── LOADING SCREEN ────────────────────────────────────────────────────────
@@ -1684,7 +1752,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     paymentErrors, setPaymentErrors, orderComplete, setOrderComplete,
     payMethod, setPayMethod, paypalLoaded, setPaypalLoaded, processing, setProcessing,
     events, setEvents, view, setView, selectedId, setSelectedId,
-    search, setSearch, filterCat, setFilterCat, filterDate, setFilterDate, filterPrice, setFilterPrice,
+    search, setSearch, filterCat, setFilterCat, filterDate, setFilterDate, filterPrice, setFilterPrice, filterVibe, setFilterVibe,
     myTickets, setMyTickets, toast, setToast, registerQty, setRegQty,
     selectedTierId, setSelectedTierId,
     calendarModal, setCalendarModal,
@@ -2397,7 +2465,20 @@ function EventCard({ ev }) {
               </span>
             )}
           </div>
-          {shortDesc && <p style={{ color: T.textSoft, fontSize: "0.78rem", lineHeight: 1.55, margin: "0 0 8px" }}>{shortDesc}</p>}
+          {shortDesc && <p style={{ color: T.textSoft, fontSize: "0.78rem", lineHeight: 1.55, margin: "0 0 6px" }}>{shortDesc}</p>}
+          {/* Vibe tag pills */}
+          {(ev.vibeTags || []).length > 0 && (
+            <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "8px" }}>
+              {(ev.vibeTags || []).slice(0, 4).map(vid => {
+                const vt = VIBE_TAGS.find(v => v.id === vid);
+                return vt ? (
+                  <span key={vid} style={{ background: T.green5, color: T.green1, borderRadius: "100px", padding: "2px 8px", fontSize: "0.68rem", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                    {vt.emoji} {vt.label}
+                  </span>
+                ) : null;
+              })}
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
             <div style={{ color: lowestPrice === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "0.95rem" }}>
               {lowestPrice === 0 ? "Free" : (ev.ticketTiers && ev.ticketTiers.length > 1 ? `From $${lowestPrice}` : `$${lowestPrice}`)}
@@ -2424,7 +2505,7 @@ function EventCard({ ev }) {
 function Navbar() {
   const { view, setView, cart, setCartOpen, currentUser, handleLogout, openAuth } = useApp();
   const cartCount = cart.reduce((s, item) => s + item.qty, 0);
-  const navLinks = [["discover", "Discover"], ["mytickets", "My Tickets"]];
+  const navLinks = [["discover", "Discover"], ["vendors", "Vendors"], ["mytickets", "My Tickets"]];
   return (
     <nav style={{ background: T.bgDeep, padding: "0 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: "68px", position: "sticky", top: 0, zIndex: 200, boxShadow: "0 2px 12px rgba(0,0,0,0.18)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", minWidth: 0 }}>
@@ -2580,10 +2661,11 @@ function CalendarView() {
 
 // ─── DISCOVER VIEW ────────────────────────────────────────────────────────────
 function DiscoverView() {
-  const { search, setSearch, filterCat, setFilterCat, filterDate, setFilterDate, filterPrice, setFilterPrice, filteredEvents, activeEvents, archivedEvents, following } = useApp();
+  const { search, setSearch, filterCat, setFilterCat, filterDate, setFilterDate, filterPrice, setFilterPrice, filterVibe, setFilterVibe, filteredEvents, activeEvents, archivedEvents, following } = useApp();
   const [filterFollowing, setFilterFollowing] = useState(false);
-  const activeFilterCount = (filterCat !== "All" ? 1 : 0) + (filterDate !== "all" ? 1 : 0) + (filterPrice !== "all" ? 1 : 0) + (filterFollowing ? 1 : 0);
-  const clearAll = () => { setSearch(""); setFilterCat("All"); setFilterDate("all"); setFilterPrice("all"); setFilterFollowing(false); };
+  const toggleVibe = (id) => setFilterVibe(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
+  const activeFilterCount = (filterCat !== "All" ? 1 : 0) + (filterDate !== "all" ? 1 : 0) + (filterPrice !== "all" ? 1 : 0) + (filterFollowing ? 1 : 0) + filterVibe.length;
+  const clearAll = () => { setSearch(""); setFilterCat("All"); setFilterDate("all"); setFilterPrice("all"); setFilterFollowing(false); setFilterVibe([]); };
   const displayEvents = filterFollowing ? filteredEvents.filter(ev => following.has(ev.organizer)) : filteredEvents;
   return (
     <div style={{ minHeight: "100vh", background: T.bg }}>
@@ -2621,6 +2703,18 @@ function DiscoverView() {
           {following.size > 0 && <button onClick={() => setFilterFollowing(f => !f)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterFollowing ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterFollowing ? `${T.earth}18` : "transparent", color: filterFollowing ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🔔 Following</button>}
         </div>
       </div>
+      {/* Vibe tag filter row */}
+      <div style={{ padding: "0.5rem 2rem 0", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginRight: "2px" }}>Vibe:</span>
+        {VIBE_TAGS.map(vt => {
+          const active = filterVibe.includes(vt.id);
+          return (
+            <button key={vt.id} onClick={() => toggleVibe(vt.id)}
+              style={{ padding: "4px 11px", borderRadius: "100px", border: active ? `1px solid ${T.green1}` : `1px solid ${T.border}`, background: active ? T.green5 : "transparent", color: active ? T.green1 : T.textSoft, fontSize: "0.76rem", cursor: "pointer", fontFamily: "inherit", fontWeight: active ? 700 : 400, display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+              {vt.emoji} {vt.label}
+            </button>
+          );
+        })}
       <div style={{ padding: "1rem 2rem 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
         <div style={{ color: T.textSoft, fontSize: "0.85rem" }}>
           {filteredEvents.length} event{filteredEvents.length !== 1 ? "s" : ""} found
@@ -2902,6 +2996,7 @@ function DetailView() {
             {multiDay(ev) && <span style={{ background: T.earth, color: "#fff", borderRadius: "6px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 700 }}>Multi-Day</span>}
             {ev.vendorInvite && <span style={{ background: T.earth, color: "#fff", borderRadius: "6px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 700 }}>🛖 Vendors Welcome</span>}
             {(ev.tags || []).map(t => <span key={t} style={{ background: T.green5, color: T.green1, borderRadius: "6px", padding: "4px 10px", fontSize: "0.75rem" }}>#{t}</span>)}
+            {(ev.vibeTags || []).map(vid => { const vt = VIBE_TAGS.find(v => v.id === vid); return vt ? <span key={vid} style={{ background: T.bgCard, border: `1px solid ${T.green3}`, color: T.green4, borderRadius: "100px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 600 }}>{vt.emoji} {vt.label}</span> : null; })}
           </div>
           <h1 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "clamp(1.8rem,4vw,2.5rem)", fontWeight: 700, margin: "0 0 1rem", lineHeight: 1.2 }}>{ev.title}</h1>
           {/* Recurring badge */}
@@ -2983,6 +3078,9 @@ function DetailView() {
           {/* ── COMMUNITY PHOTOS ── */}
           <EventPhotoGallery eventId={ev.id} />
 
+          {/* ── MEMORY REEL (past events with 2+ photos) ── */}
+          {isExpired(ev) && <MemoryReel eventId={ev.id} />}
+
           {/* ── Q&A ── */}
           <QASection ev={ev} />
 
@@ -3048,10 +3146,13 @@ function DetailView() {
 
           {/* Quantity + CTA */}
           {registered ? (
-            <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
-              <div style={{ fontSize: "1.5rem" }}>✅</div>
-              <div style={{ color: T.green1, fontWeight: 700, marginTop: "6px" }}>You're registered!</div>
-              <div style={{ color: T.textSoft, fontSize: "0.8rem", marginTop: "4px" }}>See My Tickets for details & QR code</div>
+            <div>
+              <CountdownTimer ev={ev} />
+              <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
+                <div style={{ fontSize: "1.5rem" }}>✅</div>
+                <div style={{ color: T.green1, fontWeight: 700, marginTop: "6px" }}>You're registered!</div>
+                <div style={{ color: T.textSoft, fontSize: "0.8rem", marginTop: "4px" }}>See My Tickets for details & QR code</div>
+              </div>
             </div>
           ) : full ? (
             <div>
@@ -3563,6 +3664,23 @@ function CreateView() {
                 </div>
               </div>
             )}
+          </section>
+          {/* ── VIBE TAGS SECTION ── */}
+          <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "20px" }}>
+            <h3 style={{ color: T.text, margin: "0 0 6px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>✨ Vibe Tags</h3>
+            <p style={{ color: T.textSoft, fontSize: "0.83rem", margin: "0 0 16px", lineHeight: 1.55 }}>Help guests find events that match their style. Select all that apply.</p>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {VIBE_TAGS.map(vt => {
+                const active = (form.vibeTags || []).includes(vt.id);
+                return (
+                  <button key={vt.id} type="button"
+                    onClick={() => setForm(f => ({ ...f, vibeTags: active ? (f.vibeTags||[]).filter(v => v !== vt.id) : [...(f.vibeTags||[]), vt.id] }))}
+                    style={{ padding: "7px 14px", borderRadius: "100px", border: active ? `2px solid ${T.green1}` : `1px solid ${T.border}`, background: active ? T.green5 : "transparent", color: active ? T.green1 : T.textSoft, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: active ? 700 : 400, display: "flex", alignItems: "center", gap: "5px", transition: "all 0.15s" }}>
+                    {vt.emoji} {vt.label}
+                  </button>
+                );
+              })}
+            </div>
           </section>
           {/* ── REFUND POLICY SECTION ── */}
           <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "20px" }}>
@@ -4394,7 +4512,15 @@ function DashboardView() {
         )}
         {dashTab === "checkin" && (
           <div>
-            <h2 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.4rem", margin: "0 0 1.2rem" }}>🎟️ Event Check-In</h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.2rem", flexWrap: "wrap", gap: "10px" }}>
+              <h2 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.4rem", margin: 0 }}>🎟️ Event Check-In</h2>
+              {checkinEvId && (
+                <button onClick={() => setView("dayofmode")}
+                  style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "10px", padding: "10px 20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.88rem", display: "flex", alignItems: "center", gap: "7px" }}>
+                  📱 Day-of Mode
+                </button>
+              )}
+            </div>
             {/* Event picker */}
             <div style={{ marginBottom: "1.5rem" }}>
               <label style={{ color: T.textSoft, fontSize: "0.82rem", fontWeight: 600, display: "block", marginBottom: "6px" }}>Select event to check in attendees</label>
@@ -4626,8 +4752,8 @@ function DashboardView() {
           const allEvents = events;
           const totalRevenue = allEvents.reduce((s, ev) => s + (ev.ticketTiers || []).reduce((ts, t) => ts + t.price * t.sold, 0), 0);
           const totalRegistrations = allEvents.reduce((s, ev) => s + (ev.ticketTiers || []).reduce((ts, t) => ts + t.sold, 0), 0);
-          const totalCapacity = allEvents.reduce((s, ev) => s + (ev.capacity || 0), 0);
-          const fillRate = totalCapacity > 0 ? Math.round((totalRegistrations / totalCapacity) * 100) : 0;
+          const totalCapacityVal = allEvents.reduce((s, ev) => s + (ev.capacity || 0), 0);
+          const fillRate = totalCapacityVal > 0 ? Math.round((totalRegistrations / totalCapacityVal) * 100) : 0;
           const freeEvents = allEvents.filter(ev => (ev.ticketTiers||[]).every(t => t.price === 0) || (ev.ticketTiers||[]).length === 0).length;
           const paidEvents = allEvents.length - freeEvents;
 
@@ -4658,15 +4784,60 @@ function DashboardView() {
               {sub && <div style={{ color: T.textSoft, fontSize: "0.78rem", marginTop: "6px" }}>{sub}</div>}
             </div>
           );
+
+          // Build a ticket-sales-over-time chart from event dates
+          // Group sold tickets by event month (approximated from event startDate)
+          const monthMap = {};
+          allEvents.forEach(ev => {
+            if (!ev.startDate) return;
+            const key = ev.startDate.slice(0, 7); // "YYYY-MM"
+            const reg = (ev.ticketTiers||[]).reduce((s,t) => s + t.sold, 0);
+            const rev = (ev.ticketTiers||[]).reduce((s,t) => s + t.price * t.sold, 0);
+            if (!monthMap[key]) monthMap[key] = { month: key, tickets: 0, revenue: 0 };
+            monthMap[key].tickets += reg;
+            monthMap[key].revenue += rev;
+          });
+          const trendData = Object.values(monthMap).sort((a,b) => a.month.localeCompare(b.month)).map(d => ({
+            ...d,
+            label: new Date(d.month + "-01").toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
+          }));
+
           return (
             <div style={{ display: "grid", gap: "24px" }}>
               {/* Stat cards */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: "14px" }}>
                 {statCard("Total Revenue", `$${totalRevenue.toLocaleString()}`, `${paidEvents} paid event${paidEvents !== 1 ? "s" : ""}`, T.gold)}
                 {statCard("Total Registrations", totalRegistrations.toLocaleString(), `across ${allEvents.length} event${allEvents.length !== 1 ? "s" : ""}`, T.green1)}
-                {statCard("Avg Fill Rate", `${fillRate}%`, `${totalCapacity.toLocaleString()} total capacity`)}
+                {statCard("Avg Fill Rate", `${fillRate}%`, `${totalCapacityVal.toLocaleString()} total capacity`)}
                 {statCard("Free Events", freeEvents, `${paidEvents} paid event${paidEvents !== 1 ? "s" : ""}`)}
               </div>
+
+              {/* Revenue + Registration trend chart */}
+              {trendData.length >= 2 && (() => {
+                const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = window.Recharts || {};
+                if (!ResponsiveContainer) return (
+                  <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "14px", padding: "22px", color: T.stoneL, fontSize: "0.85rem" }}>
+                    Loading chart…
+                  </div>
+                );
+                return (
+                  <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "14px", padding: "22px" }}>
+                    <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.05rem", margin: "0 0 18px" }}>📈 Tickets & Revenue by Event Month</h3>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
+                        <XAxis dataKey="label" tick={{ fill: T.stoneL, fontSize: 11 }} />
+                        <YAxis yAxisId="left" tick={{ fill: T.stoneL, fontSize: 11 }} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fill: T.gold, fontSize: 11 }} tickFormatter={v => `$${v}`} />
+                        <Tooltip formatter={(val, name) => name === "Revenue" ? [`$${val.toFixed(0)}`, name] : [val, name]} contentStyle={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "8px", fontSize: "0.82rem" }} />
+                        <Legend wrapperStyle={{ fontSize: "0.8rem" }} />
+                        <Line yAxisId="left" type="monotone" dataKey="tickets" stroke={T.green2} strokeWidth={2.5} dot={{ fill: T.green1, strokeWidth: 2, r: 4 }} name="Tickets Sold" />
+                        <Line yAxisId="right" type="monotone" dataKey="revenue" stroke={T.gold} strokeWidth={2.5} dot={{ fill: T.gold, strokeWidth: 2, r: 4 }} name="Revenue" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })()}
 
               {/* Registrations by category */}
               <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "14px", padding: "22px" }}>
@@ -4891,6 +5062,7 @@ function MobileBottomNav() {
 
   const navItems = [
     { id: "discover", icon: "🌿", label: "Discover" },
+    { id: "vendors",  icon: "🛖", label: "Vendors" },
     { id: "saved", icon: "🔖", label: "Saved", badge: savedCount },
     { id: "mytickets", icon: "🎫", label: "Tickets" },
     { id: "profile", icon: currentUser ? "👤" : "🔑", label: currentUser ? "Profile" : "Sign In" },
@@ -4925,6 +5097,385 @@ function MobileBottomNav() {
 }
 
 // ─── FOOTER ───────────────────────────────────────────────────────────────────
+// ─── MEMORY REEL ──────────────────────────────────────────────────────────────
+// ─── DAY-OF CHECK-IN MODE ─────────────────────────────────────────────────────
+function DayOfModeView() {
+  const { events, setView, checkinAttendee, undoCheckin, showToast } = useApp();
+  const [evId, setEvId] = useState(null);
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [checkinFeedback, setCheckinFeedback] = useState(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const scanIntervalRef = useRef(null);
+  const ticketsRef = useRef([]);
+  useEffect(() => { ticketsRef.current = tickets; }, [tickets]);
+
+  const activeEvents = events.filter(ev => !isExpired(ev));
+
+  const loadTickets = async (id) => {
+    setLoading(true);
+    const result = await supabase.from("tickets").select("*").eq("event_id", id);
+    if (result.data) {
+      const mapped = result.data.map(t => ({
+        id: t.id, ticketId: t.ticket_id, buyerName: t.buyer_name, buyerEmail: t.buyer_email,
+        tierName: t.tier_name, qty: t.quantity, status: t.status,
+        checkedIn: t.checked_in, checkinTime: t.checkin_time, eventId: t.event_id,
+      }));
+      setTickets(mapped); ticketsRef.current = mapped;
+    }
+    setLoading(false);
+  };
+
+  const handleEvChange = (id) => { setEvId(id); if (id) loadTickets(id); else setTickets([]); };
+
+  const doCheckin = async (ticket) => {
+    if (ticket.checkedIn) { showToast(`${ticket.buyerName} already checked in`, "warn"); return; }
+    await checkinAttendee(ticket.eventId, ticket.id);
+    setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, checkedIn: true, checkinTime: new Date().toLocaleTimeString() } : t));
+    setCheckinFeedback({ name: ticket.buyerName });
+    setScanResult(null);
+    setTimeout(() => setCheckinFeedback(null), 2500);
+  };
+
+  const stopScanner = () => {
+    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+    if (videoRef.current?.srcObject) { videoRef.current.srcObject.getTracks().forEach(t => t.stop()); videoRef.current.srcObject = null; }
+    setScanning(false);
+  };
+  const startScanner = async () => {
+    setScanResult(null); setScanning(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      setTimeout(() => {
+        if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); scanIntervalRef.current = setInterval(scanFrame, 300); }
+      }, 200);
+    } catch { setScanning(false); alert("Camera access denied."); }
+  };
+  const scanFrame = () => {
+    const video = videoRef.current; const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState !== 4) return;
+    const ctx = canvas.getContext("2d"); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (window.jsQR) {
+      const code = window.jsQR(imageData.data, imageData.width, imageData.height);
+      if (code) {
+        stopScanner();
+        const m = code.data.match(/TKT-[A-Z0-9]+/);
+        if (m) { const found = ticketsRef.current.find(t => t.ticketId === m[0]); setScanResult(found || { notFound: true, raw: m[0] }); }
+        else setScanResult({ notFound: true, raw: code.data });
+      }
+    }
+  };
+
+  const checkedIn = tickets.filter(t => t.checkedIn && t.status !== "cancelled").length;
+  const total = tickets.filter(t => t.status !== "cancelled").length;
+  const filtered = tickets.filter(t => t.status !== "cancelled" && (!search || [t.buyerName, t.buyerEmail, t.ticketId].some(f => f && f.toLowerCase().includes(search.toLowerCase()))));
+  const ev = events.find(e => e.id === evId);
+
+  return (
+    <div style={{ minHeight: "100vh", background: T.bgDeep, color: "#fff", fontFamily: "'DM Sans',system-ui,sans-serif" }}>
+      <div style={{ background: T.bgMid, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid rgba(116,198,157,0.2)`, position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ fontSize: "1.4rem" }}>📱</div>
+          <div>
+            <div style={{ color: T.green3, fontWeight: 700, fontSize: "0.95rem" }}>Day-of Mode</div>
+            {ev && <div style={{ color: T.stoneL, fontSize: "0.75rem" }}>{ev.title}</div>}
+          </div>
+        </div>
+        <button onClick={() => { stopScanner(); setView("dashboard"); }}
+          style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.82rem" }}>✕ Exit</button>
+      </div>
+      <div style={{ padding: "16px" }}>
+        {!evId ? (
+          <div style={{ maxWidth: "500px", margin: "3rem auto", textAlign: "center" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🎟️</div>
+            <h2 style={{ fontFamily: "'Lora',serif", margin: "0 0 1.5rem", fontSize: "1.5rem" }}>Select Today's Event</h2>
+            <div style={{ display: "grid", gap: "10px" }}>
+              {activeEvents.map(e => (
+                <button key={e.id} onClick={() => handleEvChange(e.id)}
+                  style={{ background: `linear-gradient(135deg,${T.bgMid},rgba(0,0,0,0.3))`, border: `2px solid ${T.green1}50`, borderRadius: "14px", padding: "18px 20px", cursor: "pointer", color: "#fff", textAlign: "left", fontFamily: "inherit" }}>
+                  <div style={{ fontWeight: 700, fontSize: "1rem", marginBottom: "3px" }}>{e.title}</div>
+                  <div style={{ color: T.stoneL, fontSize: "0.8rem" }}>{dateRange(e)} · {e.location}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ maxWidth: "600px", margin: "0 auto" }}>
+            {/* Stats */}
+            <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
+              {[["Checked In", checkedIn, T.green3], ["Remaining", total - checkedIn, "#F59E0B"], ["Total", total, T.stoneL]].map(([l, v, c]) => (
+                <div key={l} style={{ flex: 1, background: "rgba(255,255,255,0.07)", borderRadius: "12px", padding: "14px 8px", textAlign: "center", border: "1px solid rgba(255,255,255,0.1)" }}>
+                  <div style={{ color: c, fontSize: "2rem", fontWeight: 700, fontFamily: "'Lora',serif", lineHeight: 1 }}>{v}</div>
+                  <div style={{ color: T.stoneL, fontSize: "0.68rem", marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{l}</div>
+                </div>
+              ))}
+            </div>
+            {total > 0 && (
+              <div style={{ marginBottom: "16px" }}>
+                <div style={{ height: "10px", background: "rgba(255,255,255,0.1)", borderRadius: "5px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${(checkedIn / total) * 100}%`, background: `linear-gradient(90deg,${T.green2},${T.green3})`, borderRadius: "5px", transition: "width 0.5s" }} />
+                </div>
+                <div style={{ color: T.stoneL, fontSize: "0.7rem", marginTop: "4px", textAlign: "right" }}>{Math.round((checkedIn / total) * 100)}% checked in</div>
+              </div>
+            )}
+            {/* Big scan button */}
+            <button onClick={scanning ? stopScanner : startScanner}
+              style={{ width: "100%", background: scanning ? "#DC2626" : `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "16px", padding: "20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "1.1rem", marginBottom: "14px", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+              {scanning ? "⏹ Stop Scanner" : "📷 Scan QR Code"}
+            </button>
+            {scanning && (
+              <div style={{ position: "relative", borderRadius: "16px", overflow: "hidden", marginBottom: "14px", background: "#000" }}>
+                <video ref={videoRef} style={{ width: "100%", display: "block" }} playsInline />
+                <canvas ref={canvasRef} style={{ display: "none" }} />
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                  <div style={{ width: "200px", height: "200px", border: `3px solid ${T.green3}`, borderRadius: "16px", boxShadow: "0 0 0 2000px rgba(0,0,0,0.5)" }} />
+                </div>
+              </div>
+            )}
+            {scanResult && !scanResult.notFound && (
+              <div style={{ background: scanResult.checkedIn ? "rgba(220,38,38,0.15)" : `${T.green1}25`, border: `2px solid ${scanResult.checkedIn ? T.warn : T.green2}`, borderRadius: "14px", padding: "18px", marginBottom: "14px" }}>
+                <div style={{ fontWeight: 700, fontSize: "1.1rem", marginBottom: "4px" }}>{scanResult.buyerName}</div>
+                <div style={{ color: T.stoneL, fontSize: "0.82rem", marginBottom: "12px" }}>{scanResult.tierName} · {scanResult.ticketId}</div>
+                {scanResult.checkedIn ? (
+                  <div style={{ color: T.warn, fontWeight: 700 }}>⚠️ Already checked in at {scanResult.checkinTime}</div>
+                ) : (
+                  <button onClick={() => doCheckin(scanResult)}
+                    style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "1rem" }}>
+                    ✅ Check In {scanResult.buyerName}
+                  </button>
+                )}
+              </div>
+            )}
+            {scanResult?.notFound && (
+              <div style={{ background: "rgba(220,38,38,0.15)", border: `2px solid ${T.warn}`, borderRadius: "14px", padding: "16px", marginBottom: "14px", textAlign: "center" }}>
+                <div style={{ color: T.warn, fontWeight: 700 }}>❌ Ticket Not Found</div>
+                <div style={{ color: T.stoneL, fontSize: "0.78rem", marginTop: "4px" }}>{scanResult.raw}</div>
+              </div>
+            )}
+            {/* Success flash */}
+            {checkinFeedback && (
+              <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 999, background: T.green1, borderRadius: "20px", padding: "28px 36px", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.5)", animation: "slideUp 0.3s ease" }}>
+                <div style={{ fontSize: "3.5rem", marginBottom: "8px" }}>✅</div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: "1.2rem" }}>{checkinFeedback.name}</div>
+                <div style={{ color: T.green4, fontSize: "0.85rem", marginTop: "4px" }}>Checked in!</div>
+              </div>
+            )}
+            {/* Manual search */}
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Search name or ticket ID…"
+              style={{ width: "100%", padding: "14px 16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: "0.9rem", fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: "12px" }} />
+            <div style={{ display: "grid", gap: "8px" }}>
+              {loading && <div style={{ textAlign: "center", padding: "2rem", color: T.stoneL }}>Loading attendees…</div>}
+              {!loading && filtered.map(t => (
+                <div key={t.id} style={{ background: t.checkedIn ? `${T.green1}20` : "rgba(255,255,255,0.05)", border: `2px solid ${t.checkedIn ? T.green2 : "rgba(255,255,255,0.1)"}`, borderRadius: "14px", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: "1rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.buyerName}</div>
+                    <div style={{ color: T.stoneL, fontSize: "0.72rem", marginTop: "2px" }}>{t.tierName} · {t.qty} ticket{t.qty > 1 ? "s" : ""}</div>
+                    {t.checkedIn && <div style={{ color: T.green3, fontSize: "0.7rem", marginTop: "2px" }}>✓ {t.checkinTime || "Checked in"}</div>}
+                  </div>
+                  {t.checkedIn ? (
+                    <button onClick={() => { undoCheckin(t.id); setTickets(prev => prev.map(x => x.id === t.id ? { ...x, checkedIn: false, checkinTime: null } : x)); }}
+                      style={{ background: "rgba(220,38,38,0.2)", border: "1px solid rgba(220,38,38,0.4)", color: "#FCA5A5", borderRadius: "10px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem", flexShrink: 0 }}>Undo</button>
+                  ) : (
+                    <button onClick={() => doCheckin(t)}
+                      style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, border: "none", color: "#fff", borderRadius: "10px", padding: "12px 20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.95rem", flexShrink: 0 }}>✓ In</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── VENDOR DIRECTORY VIEW ────────────────────────────────────────────────────
+function VendorDirectoryView() {
+  const { events, setSelectedId, setView } = useApp();
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("All");
+
+  // Collect all approved vendors across all events, deduplicate by email
+  const allVendors = [];
+  const seen = new Set();
+  events.forEach(ev => {
+    (ev.vendors || []).filter(v => v.status === "approved").forEach(v => {
+      const key = v.email || v.businessName;
+      if (!seen.has(key)) {
+        seen.add(key);
+        allVendors.push({ ...v, eventTitle: ev.title, eventId: ev.id, eventDate: ev.startDate });
+      }
+    });
+  });
+
+  const vendorTypes = ["All", ...new Set(allVendors.map(v => v.vendorType).filter(Boolean))];
+  const filtered = allVendors.filter(v => {
+    const q = search.toLowerCase();
+    const ms = !search || [v.businessName, v.description, v.city, v.vendorType].some(s => s && s.toLowerCase().includes(q));
+    const mt = filterType === "All" || v.vendorType === filterType;
+    return ms && mt;
+  });
+
+  return (
+    <div style={{ minHeight: "100vh", background: T.bg }}>
+      <div style={{ background: `linear-gradient(160deg,${T.bgDeep},${T.bgMid})`, padding: "3rem 2rem 2.5rem", textAlign: "center" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: `${T.earth}25`, border: `1px solid ${T.earthL}50`, borderRadius: "100px", padding: "5px 16px", fontSize: "0.78rem", color: T.earthL, fontWeight: 600, marginBottom: "1rem" }}>🛖 VENDOR COMMUNITY</div>
+        <h1 style={{ color: "#fff", fontFamily: "'Lora',serif", fontSize: "clamp(1.8rem,4vw,2.8rem)", fontWeight: 700, margin: "0 0 0.75rem" }}>Meet Our Vendors</h1>
+        <p style={{ color: "#9CA3AF", maxWidth: "480px", margin: "0 auto 1.5rem", lineHeight: 1.7 }}>Farmers, artisans, and makers who bring New Harmony Life to life.</p>
+        <div style={{ maxWidth: "480px", margin: "0 auto", position: "relative" }}>
+          <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)" }}>🔍</span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search vendors, products, cities…"
+            style={{ width: "100%", padding: "12px 14px 12px 40px", background: "rgba(255,255,255,0.12)", border: `1px solid ${T.green3}40`, borderRadius: "12px", color: "#fff", fontSize: "0.9rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
+        </div>
+      </div>
+
+      {/* Type filter */}
+      <div style={{ padding: "1rem 2rem 0", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        {vendorTypes.map(t => (
+          <button key={t} onClick={() => setFilterType(t)}
+            style={{ padding: "5px 14px", borderRadius: "100px", border: filterType === t ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterType === t ? `${T.earthL}25` : "transparent", color: filterType === t ? T.earth : T.textSoft, fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", fontWeight: filterType === t ? 700 : 400 }}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: "1.5rem 2rem 3rem" }}>
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "4rem 0", color: T.stoneL }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🛖</div>
+            <div style={{ fontSize: "1rem", color: T.textMid }}>No vendors found{search ? " for that search" : ""}</div>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "18px" }}>
+            {filtered.map((v, i) => (
+              <div key={i} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "14px", overflow: "hidden", transition: "box-shadow 0.2s, transform 0.2s" }}
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 8px 30px rgba(44,106,79,0.14)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
+                {/* Header strip */}
+                <div style={{ background: `linear-gradient(135deg,${T.bgDeep},${T.bgMid})`, padding: "16px 18px", display: "flex", alignItems: "center", gap: "12px" }}>
+                  {v.photo ? (
+                    <img src={v.photo} alt={v.businessName} style={{ width: "52px", height: "52px", borderRadius: "10px", objectFit: "cover", flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: "52px", height: "52px", borderRadius: "10px", background: `${T.green1}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem", flexShrink: 0 }}>🌿</div>
+                  )}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: "0.95rem", fontFamily: "'Lora',serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.businessName}</div>
+                    <div style={{ color: T.green4, fontSize: "0.72rem", marginTop: "2px" }}>{v.vendorType}</div>
+                    {v.city && <div style={{ color: T.stoneL, fontSize: "0.7rem" }}>📍 {v.city}{v.state ? `, ${v.state}` : ""}</div>}
+                  </div>
+                </div>
+                <div style={{ padding: "14px 18px" }}>
+                  {v.description && <p style={{ color: T.textSoft, fontSize: "0.8rem", lineHeight: 1.55, margin: "0 0 12px", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.description}</p>}
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
+                    {v.website && <a href={v.website.startsWith("http") ? v.website : `https://${v.website}`} target="_blank" rel="noopener noreferrer" style={{ color: T.green1, fontSize: "0.75rem", textDecoration: "none", fontWeight: 600 }}>🌐 Website</a>}
+                    {v.instagram && <span style={{ color: T.earth, fontSize: "0.75rem", fontWeight: 600 }}>📷 {v.instagram}</span>}
+                  </div>
+                  <button onClick={() => { setSelectedId(v.eventId); setView("detail"); }}
+                    style={{ width: "100%", background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
+                    See at: {v.eventTitle} →
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MemoryReel({ eventId }) {
+  const { eventPhotos, loadEventPhotos, events } = useApp();
+  const [loaded, setLoaded] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const intervalRef = useRef(null);
+  const photos = eventPhotos[eventId] || [];
+  const ev = events.find(e => e.id === eventId);
+
+  useEffect(() => {
+    if (!loaded) { loadEventPhotos(eventId).catch(() => {}); setLoaded(true); }
+  }, [eventId]);
+
+  useEffect(() => {
+    if (playing && photos.length > 1) {
+      intervalRef.current = setInterval(() => setCurrent(c => (c + 1) % photos.length), 2800);
+    } else {
+      clearInterval(intervalRef.current);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [playing, photos.length]);
+
+  if (photos.length < 2) return null;
+
+  const handleShare = async () => {
+    const text = `📷 Memories from ${ev?.title || "the event"} — ${photos.length} photos from our community!`;
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch {}
+  };
+
+  return (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", overflow: "hidden", marginBottom: "2rem" }}>
+      <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.1rem", margin: 0 }}>🎞️ Memory Reel <span style={{ color: T.stoneL, fontWeight: 400, fontSize: "0.85rem" }}>({photos.length} photos)</span></h3>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={() => { setPlaying(p => !p); setCurrent(0); }}
+            style={{ background: playing ? T.warn : `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "8px", padding: "7px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem" }}>
+            {playing ? "⏹ Stop" : "▶ Play Reel"}
+          </button>
+          <button onClick={handleShare}
+            style={{ background: T.cream, border: `1px solid ${T.border}`, color: T.textMid, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.82rem" }}>
+            {copied ? "✓ Copied!" : "🔗 Share"}
+          </button>
+        </div>
+      </div>
+
+      {/* Filmstrip */}
+      {!playing ? (
+        <div style={{ display: "flex", gap: "6px", padding: "0 20px 16px", overflowX: "auto" }} className="hide-scrollbar">
+          {photos.map((p, i) => (
+            <div key={p.id} onClick={() => { setCurrent(i); setPlaying(true); }}
+              style={{ flexShrink: 0, width: "120px", height: "90px", borderRadius: "8px", overflow: "hidden", cursor: "pointer", border: `2px solid ${T.border}`, transition: "transform 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.transform = "scale(1.05)"}
+              onMouseLeave={e => e.currentTarget.style.transform = ""}>
+              <img src={p.url} alt={p.caption || "Memory"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ position: "relative", background: "#000", height: "360px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {photos.map((p, i) => (
+            <div key={p.id} style={{ position: "absolute", inset: 0, opacity: i === current ? 1 : 0, transition: "opacity 0.7s ease", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img src={p.url} alt={p.caption || "Memory"} style={{ maxWidth: "100%", maxHeight: "360px", objectFit: "contain" }} />
+            </div>
+          ))}
+          {/* Caption overlay */}
+          {photos[current]?.caption && (
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent,rgba(0,0,0,0.7))", padding: "24px 20px 14px", color: "#fff", fontSize: "0.85rem", textAlign: "center" }}>
+              {photos[current].caption}
+            </div>
+          )}
+          {/* Nav arrows */}
+          <button onClick={() => setCurrent(c => (c - 1 + photos.length) % photos.length)}
+            style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", borderRadius: "50%", width: "36px", height: "36px", cursor: "pointer", fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+          <button onClick={() => setCurrent(c => (c + 1) % photos.length)}
+            style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", borderRadius: "50%", width: "36px", height: "36px", cursor: "pointer", fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
+          {/* Dot indicators */}
+          <div style={{ position: "absolute", bottom: "10px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "5px" }}>
+            {photos.map((_, i) => <div key={i} onClick={() => setCurrent(i)} style={{ width: i === current ? "18px" : "7px", height: "7px", borderRadius: "100px", background: i === current ? T.green3 : "rgba(255,255,255,0.4)", cursor: "pointer", transition: "all 0.3s" }} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Footer() {
   const { view, setView, dashUnlocked, currentUser } = useApp();
   // Don't show footer on full-screen views
@@ -4993,7 +5544,7 @@ function AppShell() {
     if (outcome === "accepted") { setInstallPrompt(null); setShowInstallBanner(false); }
   };
 
-  const mobileHidden = ["checkout", "dashlogin", "dashboard", "create"].includes(view);
+  const mobileHidden = ["checkout", "dashlogin", "dashboard", "create", "dayofmode"].includes(view);
 
   return (
     <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", background: T.bg, minHeight: "100vh", paddingBottom: mobileHidden ? "0" : "0" }}>
@@ -5039,12 +5590,14 @@ function AppShell() {
       {/* Main content — add bottom padding on mobile so bottom nav doesn't cover content */}
       <div style={{ paddingBottom: mobileHidden ? "0" : "env(safe-area-inset-bottom, 0)" }}>
         {view === "discover" && <DiscoverView />}
+        {view === "vendors" && <VendorDirectoryView />}
         {view === "detail" && <DetailView />}
         {view === "create" && <CreateView />}
         {view === "mytickets" && <MyTicketsView />}
         {view === "checkout" && <CheckoutView />}
         {view === "dashlogin" && <DashLoginView />}
         {view === "dashboard" && <DashboardView />}
+        {view === "dayofmode" && <DayOfModeView />}
         {view === "saved" && <SavedView />}
         <Footer />
       </div>
