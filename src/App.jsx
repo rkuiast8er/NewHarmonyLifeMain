@@ -376,6 +376,29 @@ const genTicketId = () => "TKT-" + Math.random().toString(36).substr(2,10).toUpp
 const catEmoji = (c) => ({ "Music": "🎵", "Community": "🌿", "Workshop": "🛠️", "Food & Drink": "🍽️", "Sports & Nature": "⛰️", "Arts & Crafts": "🎨", "Festival": "🎪", "Charity": "💚", "Wellness": "🧘", "Other": "🗓️" }[c] || "🗓️");
 const fileToDataUrl = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
 
+// Compress + resize an image file to a max width/height, returning a JPEG data URL
+// This keeps photos small enough to store in Supabase (typically under 150KB)
+const compressImage = (file, maxPx = 1200, quality = 0.75) => new Promise((res, rej) => {
+  const reader = new FileReader();
+  reader.onerror = rej;
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onerror = rej;
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      res(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
 // ─── CALENDAR LINK GENERATORS ─────────────────────────────────────────────────
 const toCalDate = (dateStr, timeStr) => {
   if (!dateStr) return "";
@@ -1175,7 +1198,7 @@ function AppProvider({ children }) {
   const uploadEventPhoto = async (eventId, file, caption = "") => {
     if (!currentUser) { showToast("Sign in to upload photos", "warn"); return; }
     try {
-      const dataUrl = await fileToDataUrl(file);
+      const dataUrl = await compressImage(file, 1200, 0.8);
       const name = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() || currentUser.email;
       await supabase.from("event_photos").insert({ event_id: eventId, photo_url: dataUrl, caption, uploaded_by: currentUser.id, uploaded_by_name: name });
       await loadEventPhotos(eventId);
@@ -1827,11 +1850,11 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
   // ─── PHOTOS ────────────────────────────────────────────────────────────────
   const handlePhotoAdd = async (files) => {
     const arr = Array.from(files).slice(0, 8 - (form.photos || []).length);
-    const urls = await Promise.all(arr.map(fileToDataUrl));
+    const urls = await Promise.all(arr.map(f => compressImage(f, 1200, 0.75)));
     setForm(f => ({ ...f, photos: [...(f.photos || []), ...urls] }));
   };
   const removePhoto = idx => setForm(f => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }));
-  const handleVendorPhoto = async (files) => { if (!files || !files.length) return; const url = await fileToDataUrl(files[0]); setVendorForm(f => ({ ...f, photo: url })); };
+  const handleVendorPhoto = async (files) => { if (!files || !files.length) return; const url = await compressImage(files[0], 800, 0.8); setVendorForm(f => ({ ...f, photo: url })); };
 
   // ─── VENDORS ───────────────────────────────────────────────────────────────
   const validateVendor = () => {
