@@ -230,6 +230,7 @@ const EMPTY_VENDOR_APP = {
   hasPermit: false, electricNeeded: false, tentOwned: false,
   boothNeighborPref: "", website: "", instagram: "", comments: "", photo: null,
   d1: false, d2: false, d3: false, d4: false, d5: false,
+  communityOptIn: false,
 };
 
 const EMPTY_EVENT_FORM = {
@@ -253,7 +254,8 @@ const EMPTY_EVENT_FORM = {
   recurringWeekDay: "5", // 0-6 for monthly-position
   recurringEndDate: "",
   customQuestions: [], // [{id, label, type: "text"|"select"|"checkbox", options: [], required: false}]
-  vibeTags: [],       // array of VIBE_TAGS ids
+  vibeTags: [],       // array of vibeConfig ids
+  eventTypes: [],     // array of eventTypeConfig ids
   refundPolicy: "none", // "none" | "partial" | "full"
   refundDeadlineDays: 7, // days before event for partial/full refunds
 };
@@ -569,6 +571,27 @@ function AppProvider({ children }) {
     try { const s = localStorage.getItem("nh_category_config"); return s ? JSON.parse(s) : _defaultCategoryConfig; } catch { return _defaultCategoryConfig; }
   });
   const saveCategoryConfig = (cfg) => { setCategoryConfig(cfg); localStorage.setItem("nh_category_config", JSON.stringify(cfg)); };
+
+  // ── Site-wide configurable event types ────────────────────────────────
+  const _defaultEventTypeConfig = {
+    enabled: true,
+    items: [
+      { id: "in-person",    emoji: "📍", label: "In-Person" },
+      { id: "online",       emoji: "💻", label: "Online" },
+      { id: "hybrid",       emoji: "🔀", label: "Hybrid" },
+      { id: "ticketed",     emoji: "🎟️", label: "Ticketed" },
+      { id: "free-entry",   emoji: "🆓", label: "Free Entry" },
+      { id: "family",       emoji: "👨‍👩‍👧", label: "Family-Friendly" },
+      { id: "adults-only",  emoji: "🔞", label: "Adults Only" },
+      { id: "drop-in",      emoji: "🚶", label: "Drop-In" },
+      { id: "registration-required", emoji: "📋", label: "Registration Required" },
+      { id: "recurring",    emoji: "🔁", label: "Recurring" },
+    ],
+  };
+  const [eventTypeConfig, setEventTypeConfig] = useState(() => {
+    try { const s = localStorage.getItem("nh_event_type_config"); return s ? JSON.parse(s) : _defaultEventTypeConfig; } catch { return _defaultEventTypeConfig; }
+  });
+  const saveEventTypeConfig = (cfg) => { setEventTypeConfig(cfg); localStorage.setItem("nh_event_type_config", JSON.stringify(cfg)); };
   const [checkoutErrors, setCheckoutErrors] = useState({});
   const [checkoutStep, setCheckoutStep] = useState(1);
   const [paymentForm, setPaymentForm] = useState({ cardName: "", cardNum: "", expiry: "", cvv: "" });
@@ -697,6 +720,7 @@ function AppProvider({ children }) {
       recurringEndDate: ev.recurring_end_date || "",
       customQuestions: ev.custom_questions || [],
       vibeTags: ev.vibe_tags || [],
+      eventTypes: ev.event_types || [],
       refundPolicy: ev.refund_policy || "none",
       refundDeadlineDays: ev.refund_deadline_days ?? 7,
       ticketTiers: (tiers || []).filter(t => t.event_id === ev.id).map(t => ({
@@ -711,6 +735,7 @@ function AppProvider({ children }) {
         hasPermit: v.has_permit, electricNeeded: v.electric_needed,
         tentOwned: v.tent_owned, website: v.website, instagram: v.instagram,
         comments: v.comments, photo: v.photo, status: v.status,
+        communityOptIn: v.community_opt_in || false,
       })),
       waitlist: (waitlist || []).filter(w => w.event_id === ev.id).map(w => ({
         id: w.id, name: w.name, email: w.email, joinedAt: w.joined_at,
@@ -1596,6 +1621,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       recurring_end_date: form.recurringEndDate || null,
       custom_questions: form.customQuestions || [],
       vibe_tags: form.vibeTags || [],
+      event_types: form.eventTypes || [],
       refund_policy: form.refundPolicy || "none",
       refund_deadline_days: parseInt(form.refundDeadlineDays) || 7,
     };
@@ -1758,6 +1784,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       recurringEndDate: ev.recurringEndDate || "",
       customQuestions: ev.customQuestions || [],
       vibeTags: ev.vibeTags || [],
+      eventTypes: ev.eventTypes || [],
       refundPolicy: ev.refundPolicy || "none",
       refundDeadlineDays: ev.refundDeadlineDays ?? 7,
     });
@@ -1783,6 +1810,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       recurringEndDate: ev.recurringEndDate || "",
       customQuestions: ev.customQuestions || [],
       vibeTags: ev.vibeTags || [],
+      eventTypes: ev.eventTypes || [],
       refundPolicy: ev.refundPolicy || "none",
       refundDeadlineDays: ev.refundDeadlineDays ?? 7,
       startDate: "", endDate: "", // Clear dates so admin sets new ones
@@ -1832,12 +1860,68 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       tent_owned: vendorForm.tentOwned, website: vendorForm.website,
       instagram: vendorForm.instagram, comments: vendorForm.comments,
       photo: vendorForm.photo || null, status: "pending",
+      community_opt_in: vendorForm.communityOptIn || false,
     });
     await loadEvents();
     setVendorSubmitted(true);
     showToast("🌿 Application submitted!");
   };
-  const openVendorModal = evId => { setVendorModal(evId); setVendorForm(EMPTY_VENDOR_APP); setVendorErrors({}); setVendorSubmitted(false); };
+  const openVendorModal = evId => {
+    // Pre-fill from any existing approved vendor record that opted into the community directory
+    // Match by currentUser email first, then fall back to any community-opted-in vendor with same email
+    let prefill = null;
+    const userEmail = currentUser?.email || "";
+    events.forEach(ev => {
+      (ev.vendors || []).forEach(v => {
+        if (!prefill && v.communityOptIn && v.email && userEmail && v.email.toLowerCase() === userEmail.toLowerCase()) {
+          prefill = v;
+        }
+      });
+    });
+    // Also check if any vendor record matches by email even without community opt-in (same person applying again)
+    if (!prefill && userEmail) {
+      events.forEach(ev => {
+        (ev.vendors || []).forEach(v => {
+          if (!prefill && v.email && v.email.toLowerCase() === userEmail.toLowerCase()) {
+            prefill = v;
+          }
+        });
+      });
+    }
+    if (prefill) {
+      setVendorForm({
+        ...EMPTY_VENDOR_APP,
+        businessName: prefill.businessName || "",
+        contactName: prefill.contactName || "",
+        email: prefill.email || "",
+        phone: prefill.phone || "",
+        city: prefill.city || "",
+        state: prefill.state || "",
+        vendorType: prefill.vendorType || "Produce & Vegetables",
+        description: prefill.description || "",
+        spaceNeeded: prefill.spaceNeeded || "Small – 3 ft table",
+        yearsInBusiness: prefill.yearsInBusiness || "",
+        hasPermit: prefill.hasPermit || false,
+        electricNeeded: prefill.electricNeeded || false,
+        tentOwned: prefill.tentOwned || false,
+        website: prefill.website || "",
+        instagram: prefill.instagram || "",
+        photo: prefill.photo || null,
+        communityOptIn: prefill.communityOptIn || false,
+        // Always reset agreements and event-specific fields
+        d1: false, d2: false, d3: false, d4: false, d5: false,
+        boothNeighborPref: "", comments: "",
+      });
+    } else {
+      // Pre-fill name and email from logged-in user if available
+      setVendorForm({
+        ...EMPTY_VENDOR_APP,
+        contactName: currentUser ? (currentUser.user_metadata?.full_name || "") : "",
+        email: userEmail,
+      });
+    }
+    setVendorModal(evId); setVendorErrors({}); setVendorSubmitted(false);
+  };
   const updateVendorStatus = async (evId, vendorId, status) => {
     await supabase.from("vendors").update({ status }).eq("id", vendorId);
     await loadEvents();
@@ -1918,6 +2002,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     vibeConfig, saveVibeConfig,
     sortConfig, saveSortConfig,
     categoryConfig, saveCategoryConfig,
+    eventTypeConfig, saveEventTypeConfig,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -2454,10 +2539,13 @@ function AuthModal() {
 
 // ─── VENDOR MODAL ─────────────────────────────────────────────────────────────
 function VendorModal() {
-  const { vendorModal, setVendorModal, vendorForm, setVendorForm, vendorErrors, vendorSubmitted, vendorPhotoRef, handleVendorPhoto, submitVendorApp, events } = useApp();
+  const { vendorModal, setVendorModal, vendorForm, setVendorForm, vendorErrors, vendorSubmitted, vendorPhotoRef, handleVendorPhoto, submitVendorApp, events, currentUser } = useApp();
   if (!vendorModal) return null;
   const ev = events.find(e => e.id === vendorModal);
   const allAgreed = DISCLAIMERS.every(d => vendorForm[d.key]);
+  // Detect if form was pre-filled (any non-empty identifying field that wasn't blank from EMPTY_VENDOR_APP)
+  const wasPrefilled = !!(vendorForm.businessName || (vendorForm.email && vendorForm.email !== (currentUser?.email || "")));
+  const isPrefilled = !!(vendorForm.businessName && vendorForm.email);
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "2rem 1rem" }}>
       <div style={{ background: T.bgCard, borderRadius: "20px", width: "100%", maxWidth: "740px", position: "relative", boxShadow: "0 24px 70px rgba(0,0,0,0.3)", margin: "auto", overflow: "hidden" }}>
@@ -2504,6 +2592,15 @@ function VendorModal() {
               </div>
             )}
             <div style={{ padding: "1.75rem 2rem", display: "grid", gap: "18px" }}>
+              {isPrefilled && (
+                <div style={{ background: `linear-gradient(135deg,${T.green5},#EFF9F4)`, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "12px 16px", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                  <span style={{ fontSize: "1.2rem", flexShrink: 0 }}>✨</span>
+                  <div>
+                    <div style={{ color: T.green1, fontWeight: 700, fontSize: "0.86rem", marginBottom: "2px" }}>We filled this in for you!</div>
+                    <div style={{ color: T.textSoft, fontSize: "0.78rem", lineHeight: 1.55 }}>Your vendor profile was found on the community directory. Review your details, update anything that has changed, then accept the agreements to submit.</div>
+                  </div>
+                </div>
+              )}
               <div style={{ background: T.cream, borderRadius: "14px", padding: "18px", border: `1px solid ${T.border}` }}>
                 <div style={{ color: T.green1, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "14px" }}>1 · Business Information</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -2544,6 +2641,30 @@ function VendorModal() {
                 </div>
               </div>
               <Field label="Additional Notes (optional)"><textarea value={vendorForm.comments} onChange={e => setVendorForm({ ...vendorForm, comments: e.target.value })} rows={2} style={{ ...inp(), resize: "vertical", fontFamily: "inherit" }} placeholder="Anything else we should know?" /></Field>
+
+              {/* Community Directory opt-in */}
+              <div style={{ background: `linear-gradient(135deg,${T.green5},${T.bgCard})`, border: `1px solid ${T.green3}`, borderRadius: "14px", padding: "18px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
+                      <span style={{ fontSize: "1.2rem" }}>🌐</span>
+                      <span style={{ color: T.text, fontWeight: 700, fontSize: "0.95rem", fontFamily: "'Lora',serif" }}>Join the Vendor Community Page</span>
+                    </div>
+                    <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: 0, lineHeight: 1.6 }}>
+                      Get listed on the New Harmony Life public vendor directory — visible to all site visitors. Your business name, photo, product description, city, website, and Instagram will be shown on the Vendors page.
+                    </p>
+                    {vendorForm.communityOptIn && (
+                      <div style={{ marginTop: "10px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px 12px", fontSize: "0.78rem", color: T.green1, fontWeight: 600 }}>
+                        ✅ You'll appear on the Vendors community page once your application is approved!
+                      </div>
+                    )}
+                  </div>
+                  <div onClick={() => setVendorForm(f => ({ ...f, communityOptIn: !f.communityOptIn }))}
+                    style={{ width: "52px", height: "28px", borderRadius: "14px", background: vendorForm.communityOptIn ? T.green1 : "#D1D5DB", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0, marginTop: "2px" }}>
+                    <div style={{ position: "absolute", top: "4px", left: vendorForm.communityOptIn ? "28px" : "4px", width: "20px", height: "20px", borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.25)" }} />
+                  </div>
+                </div>
+              </div>
               <div style={{ background: "#FFF9F0", borderRadius: "14px", padding: "18px", border: `1px solid ${T.earthL}` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "8px" }}>
                   <div style={{ color: T.earth, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>4 · Terms & Agreements</div>
@@ -2661,92 +2782,114 @@ function TierPickerPopover({ ev, onClose }) {
   const [qty, setQty] = useState(1);
   const selectedTier = tiers.find(t => t.id === activeTierId) || tiers[0] || null;
 
-  // Close on outside click
+  // Close on outside click or Escape
   useEffect(() => {
     const handler = e => {
       if (!e.target.closest("[data-tier-picker]")) onClose();
     };
+    const keyHandler = e => { if (e.key === "Escape") onClose(); };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", keyHandler);
+    };
   }, [onClose]);
 
   if (!selectedTier) return null;
 
-  // Shared-pool: available spots = event capacity minus total sold across all tiers
   const eventSpotsLeft = spotsLeft(ev);
-  const maxQty = eventSpotsLeft;
+  const maxQty = Math.max(1, eventSpotsLeft);
 
+  // Render as fixed modal portal-style so it is never clipped by card overflow
   return (
     <div
-      data-tier-picker
-      onClick={e => e.stopPropagation()}
-      style={{
-        position: "absolute", bottom: "calc(100% + 8px)", left: 0, right: 0,
-        background: "#fff", border: `1px solid ${T.border}`, borderRadius: "14px",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.18)", zIndex: 100, padding: "16px",
-        animation: "slideUp 0.18s ease",
-      }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-        <div style={{ color: T.stoneL, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Select Ticket Type</div>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: T.stoneL, cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: "0 2px" }}>✕</button>
-      </div>
+      style={{ position: "fixed", inset: 0, zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem", background: "rgba(0,0,0,0.45)" }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div
+        data-tier-picker
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#fff", border: `1px solid ${T.border}`, borderRadius: "18px",
+          boxShadow: "0 16px 50px rgba(0,0,0,0.28)", padding: "22px",
+          width: "100%", maxWidth: "400px", animation: "slideUp 0.18s ease",
+          maxHeight: "85vh", overflowY: "auto",
+        }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+          <div>
+            <div style={{ color: T.text, fontWeight: 700, fontSize: "1rem", fontFamily: "'Lora',serif", marginBottom: "2px" }}>{ev.title}</div>
+            <div style={{ color: T.stoneL, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Select Ticket Type</div>
+          </div>
+          <button onClick={onClose} style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "50%", width: "32px", height: "32px", cursor: "pointer", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: T.stoneL }}>✕</button>
+        </div>
 
-      {/* Tier list &mdash; same style as DetailView sidebar */}
-      <div style={{ display: "grid", gap: "8px", marginBottom: "14px" }}>
-        {tiers.map(tier => {
-          const isFull = eventSpotsLeft === 0;
-          const isSel = activeTierId === tier.id;
-          return (
-            <div key={tier.id}
-              onClick={() => { if (!isFull) { setActiveTierId(tier.id); setQty(1); } }}
-              style={{
-                border: `2px solid ${isSel ? T.green2 : T.border}`, borderRadius: "12px",
-                padding: "10px 13px", cursor: isFull ? "default" : "pointer",
-                background: isSel ? `${T.green1}0A` : isFull ? T.bg : "#fff",
-                opacity: isFull ? 0.55 : 1, transition: "all 0.15s",
-              }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    {isSel && !isFull && <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: T.green2, flexShrink: 0 }} />}
-                    <span style={{ color: T.text, fontWeight: 700, fontSize: "0.86rem" }}>{tier.name}</span>
+        {/* Spots remaining */}
+        {eventSpotsLeft > 0 && eventSpotsLeft <= 15 && (
+          <div style={{ background: eventSpotsLeft <= 5 ? `${T.warn}15` : `${T.gold}15`, border: `1px solid ${eventSpotsLeft <= 5 ? T.warn : T.gold}40`, borderRadius: "8px", padding: "6px 10px", fontSize: "0.74rem", fontWeight: 600, color: eventSpotsLeft <= 5 ? T.warn : "#B45309", marginBottom: "12px" }}>
+            ⚡ Only {eventSpotsLeft} spot{eventSpotsLeft !== 1 ? "s" : ""} remaining!
+          </div>
+        )}
+
+        {/* Tier list */}
+        <div style={{ display: "grid", gap: "9px", marginBottom: "16px", marginTop: "12px" }}>
+          {tiers.map(tier => {
+            const isFull = eventSpotsLeft === 0;
+            const isSel = activeTierId === tier.id;
+            return (
+              <div key={tier.id}
+                onClick={() => { if (!isFull) { setActiveTierId(tier.id); setQty(1); } }}
+                style={{
+                  border: `2px solid ${isSel ? T.green2 : T.border}`, borderRadius: "12px",
+                  padding: "12px 14px", cursor: isFull ? "default" : "pointer",
+                  background: isSel ? `${T.green1}0D` : isFull ? T.bg : "#fff",
+                  opacity: isFull ? 0.55 : 1, transition: "all 0.15s",
+                }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {isSel && !isFull && <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: T.green2, flexShrink: 0 }} />}
+                      <span style={{ color: T.text, fontWeight: 700, fontSize: "0.9rem" }}>{tier.name}</span>
+                    </div>
+                    {tier.description && (
+                      <div style={{ color: T.textSoft, fontSize: "0.75rem", marginTop: "3px", lineHeight: 1.45 }}>{tier.description}</div>
+                    )}
                   </div>
-                  {tier.description && (
-                    <div style={{ color: T.textSoft, fontSize: "0.72rem", marginTop: "1px", lineHeight: 1.4 }}>{tier.description}</div>
-                  )}
-                </div>
-                <div style={{ color: tier.price === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "1rem", fontFamily: "'Lora',serif", flexShrink: 0, marginLeft: "10px" }}>
-                  {tier.price === 0 ? "Free" : `$${tier.price}`}
+                  <div style={{ color: tier.price === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "1.05rem", fontFamily: "'Lora',serif", flexShrink: 0 }}>
+                    {tier.price === 0 ? "Free" : `$${tier.price}`}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
 
-      {/* Quantity row */}
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-        <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Qty</div>
-        <button onClick={() => setQty(q => Math.max(1, q - 1))}
-          style={{ width: "30px", height: "30px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-        <span style={{ color: T.text, fontWeight: 700, fontSize: "1rem", minWidth: "22px", textAlign: "center" }}>{qty}</span>
-        <button onClick={() => setQty(q => Math.min(maxQty, q + 1))}
-          style={{ width: "30px", height: "30px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-        {selectedTier.price > 0 && (
-          <span style={{ color: T.earth, fontWeight: 700, fontSize: "0.88rem", marginLeft: "4px" }}>
-            ${(selectedTier.price * qty).toFixed(2)}
-          </span>
-        )}
-      </div>
+        {/* Divider */}
+        <div style={{ height: "1px", background: T.border, margin: "0 0 14px" }} />
 
-      {/* Add to cart CTA */}
-      <button
-        onClick={() => { addToCart(ev, qty, selectedTier); onClose(); }}
-        style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "10px", padding: "11px", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: `0 3px 12px ${T.green1}44` }}>
-        {selectedTier.price === 0 ? "Register Free 🌿" : `Add to Cart 🛒`}
-      </button>
-      <div style={{ color: T.stoneL, fontSize: "0.68rem", textAlign: "center", marginTop: "8px" }}>Instant confirmation · No hidden fees</div>
+        {/* Quantity row */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
+          <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Quantity</div>
+          <button onClick={() => setQty(q => Math.max(1, q - 1))}
+            style={{ width: "34px", height: "34px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.2rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+          <span style={{ color: T.text, fontWeight: 700, fontSize: "1.05rem", minWidth: "26px", textAlign: "center" }}>{qty}</span>
+          <button onClick={() => setQty(q => Math.min(maxQty, q + 1))}
+            style={{ width: "34px", height: "34px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.2rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+          {selectedTier.price > 0 && (
+            <span style={{ color: T.earth, fontWeight: 700, fontSize: "0.9rem", marginLeft: "2px" }}>
+              = ${(selectedTier.price * qty).toFixed(2)}
+            </span>
+          )}
+        </div>
+
+        {/* Add to cart CTA */}
+        <button
+          onClick={() => { addToCart(ev, qty, selectedTier); onClose(); }}
+          style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "13px", fontSize: "0.95rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 14px ${T.green1}44`, marginBottom: "8px" }}>
+          {selectedTier.price === 0 ? "Register Free 🌿" : `Add to Cart 🛒`}
+        </button>
+        <div style={{ color: T.stoneL, fontSize: "0.68rem", textAlign: "center" }}>Instant confirmation &middot; No hidden fees</div>
+      </div>
     </div>
   );
 }
@@ -3874,7 +4017,7 @@ function CheckoutView() {
 
 // ─── CREATE VIEW ──────────────────────────────────────────────────────────────
 function CreateView() {
-  const { form, setForm, formErrors, editingId, setEditingId, setView, handleSave, handlePhotoAdd, removePhoto, fileRef, dashUnlocked, categoryConfig } = useApp();
+  const { form, setForm, formErrors, editingId, setEditingId, setView, handleSave, handlePhotoAdd, removePhoto, fileRef, dashUnlocked, categoryConfig, vibeConfig, eventTypeConfig } = useApp();
   const hasChanges = form.title.trim() || form.description.trim() || form.location.trim();
 
   // Warn on browser back/close too &mdash; must be before any early returns
@@ -4090,23 +4233,44 @@ function CreateView() {
               </div>
             )}
           </section>
+          {/* ── EVENT TYPE SECTION ── */}
+          {eventTypeConfig.enabled && eventTypeConfig.items.length > 0 && (
+            <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "20px" }}>
+              <h3 style={{ color: T.text, margin: "0 0 6px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>🏷️ Event Type</h3>
+              <p style={{ color: T.textSoft, fontSize: "0.83rem", margin: "0 0 16px", lineHeight: 1.55 }}>Select all that describe this event. These help guests know what to expect.</p>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {eventTypeConfig.items.map(et => {
+                  const active = (form.eventTypes || []).includes(et.id);
+                  return (
+                    <button key={et.id} type="button"
+                      onClick={() => setForm(f => ({ ...f, eventTypes: active ? (f.eventTypes||[]).filter(v => v !== et.id) : [...(f.eventTypes||[]), et.id] }))}
+                      style={{ padding: "7px 14px", borderRadius: "100px", border: active ? `2px solid ${T.earth}` : `1px solid ${T.border}`, background: active ? `${T.earthL}22` : "transparent", color: active ? T.earth : T.textSoft, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: active ? 700 : 400, display: "flex", alignItems: "center", gap: "5px", transition: "all 0.15s" }}>
+                      {et.emoji} {et.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
           {/* ── VIBE TAGS SECTION ── */}
-          <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "20px" }}>
-            <h3 style={{ color: T.text, margin: "0 0 6px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>✨ Vibe Tags</h3>
-            <p style={{ color: T.textSoft, fontSize: "0.83rem", margin: "0 0 16px", lineHeight: 1.55 }}>Help guests find events that match their style. Select all that apply.</p>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {VIBE_TAGS.map(vt => {
-                const active = (form.vibeTags || []).includes(vt.id);
-                return (
-                  <button key={vt.id} type="button"
-                    onClick={() => setForm(f => ({ ...f, vibeTags: active ? (f.vibeTags||[]).filter(v => v !== vt.id) : [...(f.vibeTags||[]), vt.id] }))}
-                    style={{ padding: "7px 14px", borderRadius: "100px", border: active ? `2px solid ${T.green1}` : `1px solid ${T.border}`, background: active ? T.green5 : "transparent", color: active ? T.green1 : T.textSoft, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: active ? 700 : 400, display: "flex", alignItems: "center", gap: "5px", transition: "all 0.15s" }}>
-                    {vt.emoji} {vt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          {vibeConfig.items.length > 0 && (
+            <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "20px" }}>
+              <h3 style={{ color: T.text, margin: "0 0 6px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>✨ Vibe Tags</h3>
+              <p style={{ color: T.textSoft, fontSize: "0.83rem", margin: "0 0 16px", lineHeight: 1.55 }}>Help guests find events that match their style. Select all that apply.</p>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {vibeConfig.items.map(vt => {
+                  const active = (form.vibeTags || []).includes(vt.id);
+                  return (
+                    <button key={vt.id} type="button"
+                      onClick={() => setForm(f => ({ ...f, vibeTags: active ? (f.vibeTags||[]).filter(v => v !== vt.id) : [...(f.vibeTags||[]), vt.id] }))}
+                      style={{ padding: "7px 14px", borderRadius: "100px", border: active ? `2px solid ${T.green1}` : `1px solid ${T.border}`, background: active ? T.green5 : "transparent", color: active ? T.green1 : T.textSoft, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: active ? 700 : 400, display: "flex", alignItems: "center", gap: "5px", transition: "all 0.15s" }}>
+                      {vt.emoji} {vt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
           {/* ── REFUND POLICY SECTION ── */}
           <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "20px" }}>
             <h3 style={{ color: T.text, margin: "0 0 6px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>💸 Refund Policy</h3>
@@ -4785,7 +4949,7 @@ function DashLoginView() {
 
 // ─── DASHBOARD SETTINGS PANEL ────────────────────────────────────────────────
 function DashSettingsPanel() {
-  const { vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, showToast, resendApiKey, setResendApiKey } = useApp();
+  const { vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig, showToast, resendApiKey, setResendApiKey } = useApp();
 
   // ── Vibe editor state ───────────────────────────────────────────────────
   const [vibeEnabled, setVibeEnabled] = useState(vibeConfig.enabled);
@@ -4835,6 +4999,25 @@ function DashSettingsPanel() {
   const commitEditCat = () => { if (catEditVal.trim()) setCatItems(prev => prev.map((c, i) => i === catEditIdx ? catEditVal.trim() : c)); setCatEditIdx(null); };
   const addCat = () => { if (!newCat.trim()) return; setCatItems(prev => [...prev, newCat.trim()]); setNewCat(""); setCatAddOpen(false); };
   const moveCat = (idx, dir) => { const arr = [...catItems]; const s = idx + dir; if (s < 0 || s >= arr.length) return; [arr[idx], arr[s]] = [arr[s], arr[idx]]; setCatItems(arr); };
+
+  // ── Event Type editor state ──────────────────────────────────────────────
+  const [etEnabled, setEtEnabled] = useState(eventTypeConfig.enabled);
+  const [etItems, setEtItems] = useState(eventTypeConfig.items.map(v => ({ ...v })));
+  const [etEditId, setEtEditId] = useState(null);
+  const [newEt, setNewEt] = useState({ emoji: "🏷️", label: "" });
+  const [etAddOpen, setEtAddOpen] = useState(false);
+
+  const saveEts = () => { saveEventTypeConfig({ enabled: etEnabled, items: etItems }); showToast("Event type settings saved ✓"); };
+  const toggleEtEnabled = () => { const next = !etEnabled; setEtEnabled(next); saveEventTypeConfig({ enabled: next, items: etItems }); };
+  const updateEtItem = (id, field, val) => setEtItems(prev => prev.map(v => v.id === id ? { ...v, [field]: val } : v));
+  const removeEtItem = (id) => setEtItems(prev => prev.filter(v => v.id !== id));
+  const addEtItem = () => {
+    if (!newEt.label.trim()) return;
+    const id = newEt.label.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") + "-" + Date.now();
+    setEtItems(prev => [...prev, { id, emoji: newEt.emoji, label: newEt.label.trim() }]);
+    setNewEt({ emoji: "🏷️", label: "" }); setEtAddOpen(false);
+  };
+  const moveEt = (idx, dir) => { const arr = [...etItems]; const s = idx + dir; if (s < 0 || s >= arr.length) return; [arr[idx], arr[s]] = [arr[s], arr[idx]]; setEtItems(arr); };
   const updateSortItem = (id, field, val) => setSortItems(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
   const removeSortItem = (id) => setSortItems(prev => prev.filter(s => s.id !== id));
   const addSortItem = () => {
@@ -4927,6 +5110,60 @@ function DashSettingsPanel() {
         )}
 
         <SaveBtn label="Save Category Settings ✓" onClick={saveCats} />
+      </div>
+
+      {/* ── Event Types ───────────────────────────────────────────────────── */}
+      <div style={panelStyle}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", marginBottom: "6px" }}>
+          <div>
+            <h3 style={{ color: T.text, margin: "0 0 4px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>🏷️ Event Types</h3>
+            <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: 0, lineHeight: 1.5 }}>Selection buttons on the event creation form that describe the type of event (e.g. In-Person, Ticketed, Family-Friendly).</p>
+          </div>
+          <TogglePill on={etEnabled} onToggle={toggleEtEnabled} />
+        </div>
+        <StatusBadge on={etEnabled} />
+
+        <div style={{ marginBottom: "10px" }}>
+          {etItems.map((et, idx) => (
+            <div key={et.id} style={rowStyle}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1px", flexShrink: 0 }}>
+                <button onClick={() => moveEt(idx, -1)} disabled={idx === 0} style={{ background: "none", border: "none", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? T.border : T.stoneL, fontSize: "0.6rem", padding: "1px 3px", lineHeight: 1 }}>▲</button>
+                <button onClick={() => moveEt(idx, 1)} disabled={idx === etItems.length - 1} style={{ background: "none", border: "none", cursor: idx === etItems.length - 1 ? "default" : "pointer", color: idx === etItems.length - 1 ? T.border : T.stoneL, fontSize: "0.6rem", padding: "1px 3px", lineHeight: 1 }}>▼</button>
+              </div>
+              {etEditId === et.id ? (
+                <>
+                  <TinyInput value={et.emoji} onChange={val => updateEtItem(et.id, "emoji", val)} placeholder="🏷️" width="52px" />
+                  <TinyInput value={et.label} onChange={val => updateEtItem(et.id, "label", val)} placeholder="Label" />
+                  <SmBtn label="Done ✓" onClick={() => setEtEditId(null)} />
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: "1.1rem", flexShrink: 0 }}>{et.emoji}</span>
+                  <span style={{ flex: 1, color: T.textMid, fontSize: "0.85rem", fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{et.label}</span>
+                  <SmBtn label="✏️ Edit" onClick={() => setEtEditId(et.id)} />
+                  <SmBtn label="✕" onClick={() => removeEtItem(et.id)} danger />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {etAddOpen ? (
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", padding: "10px 12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+            <TinyInput value={newEt.emoji} onChange={val => setNewEt(v => ({ ...v, emoji: val }))} placeholder="🏷️" width="52px" />
+            <div style={{ flex: 1, minWidth: "140px" }}>
+              <TinyInput value={newEt.label} onChange={val => setNewEt(v => ({ ...v, label: val }))} placeholder="Type label (e.g. Outdoor Concert)" />
+            </div>
+            <SmBtn label="+ Add" onClick={addEtItem} />
+            <SmBtn label="Cancel" onClick={() => { setEtAddOpen(false); setNewEt({ emoji: "🏷️", label: "" }); }} />
+          </div>
+        ) : (
+          <button onClick={() => setEtAddOpen(true)} style={{ background: "none", border: `1px dashed ${T.green3}`, color: T.green1, borderRadius: "9px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.82rem", width: "100%", marginBottom: "12px" }}>
+            + Add Event Type
+          </button>
+        )}
+
+        <SaveBtn label="Save Event Type Settings ✓" onClick={saveEts} />
       </div>
 
       {/* ── Vibe Tags ─────────────────────────────────────────────────────── */}
@@ -5086,7 +5323,7 @@ function DashSettingsPanel() {
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView() {
-  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig } = useApp();
+  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig } = useApp();
   const [dashTab, setDashTab] = useState("events");
   const [archiveSearch, setArchiveSearch] = useState("");
   const [checkinSearch, setCheckinSearch] = useState("");
@@ -6031,11 +6268,11 @@ function VendorDirectoryView() {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("All");
 
-  // Collect all approved vendors across all events, deduplicate by email
+  // Collect approved vendors who opted into the community directory, deduplicate by email
   const allVendors = [];
   const seen = new Set();
   events.forEach(ev => {
-    (ev.vendors || []).filter(v => v.status === "approved").forEach(v => {
+    (ev.vendors || []).filter(v => v.status === "approved" && v.communityOptIn).forEach(v => {
       const key = v.email || v.businessName;
       if (!seen.has(key)) {
         seen.add(key);
@@ -6063,23 +6300,39 @@ function VendorDirectoryView() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search vendors, products, cities…"
             style={{ width: "100%", padding: "12px 14px 12px 40px", background: "rgba(255,255,255,0.12)", border: `1px solid ${T.green3}40`, borderRadius: "12px", color: "#fff", fontSize: "0.9rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
         </div>
+        {allVendors.length > 0 && (
+          <div style={{ marginTop: "1.25rem", color: T.green4, fontSize: "0.82rem" }}>
+            {allVendors.length} vendor{allVendors.length !== 1 ? "s" : ""} in our community
+          </div>
+        )}
       </div>
 
       {/* Type filter */}
-      <div style={{ padding: "1rem 2rem 0", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-        {vendorTypes.map(t => (
-          <button key={t} onClick={() => setFilterType(t)}
-            style={{ padding: "5px 14px", borderRadius: "100px", border: filterType === t ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterType === t ? `${T.earthL}25` : "transparent", color: filterType === t ? T.earth : T.textSoft, fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", fontWeight: filterType === t ? 700 : 400 }}>
-            {t}
-          </button>
-        ))}
-      </div>
+      {vendorTypes.length > 1 && (
+        <div style={{ padding: "1rem 2rem 0", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+          {vendorTypes.map(t => (
+            <button key={t} onClick={() => setFilterType(t)}
+              style={{ padding: "5px 14px", borderRadius: "100px", border: filterType === t ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterType === t ? `${T.earthL}25` : "transparent", color: filterType === t ? T.earth : T.textSoft, fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", fontWeight: filterType === t ? 700 : 400 }}>
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ padding: "1.5rem 2rem 3rem" }}>
         {filtered.length === 0 ? (
           <div style={{ textAlign: "center", padding: "4rem 0", color: T.stoneL }}>
             <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🛖</div>
-            <div style={{ fontSize: "1rem", color: T.textMid }}>No vendors found{search ? " for that search" : ""}</div>
+            <div style={{ fontSize: "1rem", color: T.textMid }}>
+              {allVendors.length === 0
+                ? "No vendors have joined the community directory yet"
+                : `No vendors found${search ? " for that search" : ""}`}
+            </div>
+            {allVendors.length === 0 && (
+              <p style={{ color: T.stoneL, fontSize: "0.82rem", maxWidth: "340px", margin: "0.75rem auto 0", lineHeight: 1.6 }}>
+                Vendors can opt in to the community directory when applying for an event.
+              </p>
+            )}
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "18px" }}>
@@ -6090,22 +6343,24 @@ function VendorDirectoryView() {
                 {/* Header strip */}
                 <div style={{ background: `linear-gradient(135deg,${T.bgDeep},${T.bgMid})`, padding: "16px 18px", display: "flex", alignItems: "center", gap: "12px" }}>
                   {v.photo ? (
-                    <img src={v.photo} alt={v.businessName} style={{ width: "52px", height: "52px", borderRadius: "10px", objectFit: "cover", flexShrink: 0 }} />
+                    <img src={v.photo} alt={v.businessName} style={{ width: "56px", height: "56px", borderRadius: "10px", objectFit: "cover", flexShrink: 0, border: `2px solid ${T.green3}40` }} />
                   ) : (
-                    <div style={{ width: "52px", height: "52px", borderRadius: "10px", background: `${T.green1}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem", flexShrink: 0 }}>🌿</div>
+                    <div style={{ width: "56px", height: "56px", borderRadius: "10px", background: `${T.green1}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.8rem", flexShrink: 0 }}>🌿</div>
                   )}
-                  <div style={{ minWidth: 0 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ color: "#fff", fontWeight: 700, fontSize: "0.95rem", fontFamily: "'Lora',serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.businessName}</div>
                     <div style={{ color: T.green4, fontSize: "0.72rem", marginTop: "2px" }}>{v.vendorType}</div>
-                    {v.city && <div style={{ color: T.stoneL, fontSize: "0.7rem" }}>📍 {v.city}{v.state ? `, ${v.state}` : ""}</div>}
+                    {v.city && <div style={{ color: T.stoneL, fontSize: "0.7rem", marginTop: "1px" }}>📍 {v.city}{v.state ? `, ${v.state}` : ""}</div>}
                   </div>
                 </div>
                 <div style={{ padding: "14px 18px" }}>
                   {v.description && <p style={{ color: T.textSoft, fontSize: "0.8rem", lineHeight: 1.55, margin: "0 0 12px", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.description}</p>}
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
-                    {v.website && <a href={v.website.startsWith("http") ? v.website : `https://${v.website}`} target="_blank" rel="noopener noreferrer" style={{ color: T.green1, fontSize: "0.75rem", textDecoration: "none", fontWeight: 600 }}>🌐 Website</a>}
-                    {v.instagram && <span style={{ color: T.earth, fontSize: "0.75rem", fontWeight: 600 }}>📷 {v.instagram}</span>}
-                  </div>
+                  {(v.website || v.instagram) && (
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
+                      {v.website && <a href={v.website.startsWith("http") ? v.website : `https://${v.website}`} target="_blank" rel="noopener noreferrer" style={{ color: T.green1, fontSize: "0.75rem", textDecoration: "none", fontWeight: 600 }}>🌐 Website</a>}
+                      {v.instagram && <span style={{ color: T.earth, fontSize: "0.75rem", fontWeight: 600 }}>📷 {v.instagram}</span>}
+                    </div>
+                  )}
                   <button onClick={() => { setSelectedId(v.eventId); setView("detail"); }}
                     style={{ width: "100%", background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
                     See at: {v.eventTitle} →
