@@ -3737,12 +3737,10 @@ function ReviewsSection({ ev }) {
 
 // ─── Q&A SECTION ──────────────────────────────────────────────────────────────
 function QASection({ ev }) {
-  const { qaItems, loadQA, submitQuestion, answerQuestion, deleteQuestion, currentUser, openAuth, dashUnlocked } = useApp();
+  const { qaItems, loadQA, submitQuestion, currentUser, openAuth } = useApp();
   const evQA = qaItems[ev.id] || [];
   const [loaded, setLoaded] = useState(false);
   const [newQ, setNewQ] = useState("");
-  const [answerFor, setAnswerFor] = useState(null);
-  const [answerText, setAnswerText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => { if (!loaded) { loadQA(ev.id).catch(() => {}); setLoaded(true); } }, [ev.id]);
@@ -3755,19 +3753,12 @@ function QASection({ ev }) {
     setNewQ(""); setSubmitting(false);
   };
 
-  const handleAnswer = async (qaId) => {
-    if (!answerText.trim()) return;
-    await answerQuestion(qaId, ev.id, answerText.trim()).catch(() => {});
-    setAnswerFor(null); setAnswerText("");
-  };
-
   const answered = evQA.filter(q => q.answer);
-  const unanswered = evQA.filter(q => !q.answer);
 
   return (
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "2rem" }}>
       <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.1rem", margin: "0 0 18px" }}>
-        ❓ Q&amp;A {evQA.length > 0 && <span style={{ color: T.stoneL, fontWeight: 400, fontSize: "0.9rem" }}>({evQA.length})</span>}
+        ❓ Q&amp;A {answered.length > 0 && <span style={{ color: T.stoneL, fontWeight: 400, fontSize: "0.9rem" }}>({answered.length})</span>}
       </h3>
 
       {/* Ask a question */}
@@ -3783,43 +3774,19 @@ function QASection({ ev }) {
         </button>
       </div>
 
-      {evQA.length === 0
-        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "1.5rem 0" }}>No questions yet &mdash; ask away!</div>
+      {answered.length === 0
+        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "1.5rem 0" }}>No answered questions yet &mdash; ask away!</div>
         : <div style={{ display: "grid", gap: "12px" }}>
-            {[...unanswered, ...answered].map(q => (
+            {answered.map(q => (
               <div key={q.id} style={{ background: T.cream, borderRadius: "12px", padding: "14px 16px", border: `1px solid ${T.border}` }}>
-                <div style={{ display: "flex", gap: "10px", marginBottom: q.answer ? "12px" : "0" }}>
+                <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
                   <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: T.gold, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.72rem", flexShrink: 0, marginTop: "2px" }}>Q</div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ color: T.text, fontSize: "0.875rem", margin: "0 0 3px", fontWeight: 600, lineHeight: 1.5 }}>{q.question}</p>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ color: T.stoneL, fontSize: "0.72rem" }}>{q.userName} · {q.createdAt ? new Date(q.createdAt).toLocaleDateString() : ""}</span>
-                      {dashUnlocked && !q.answer && (
-                        <button onClick={() => { setAnswerFor(answerFor === q.id ? null : q.id); setAnswerText(""); }}
-                          style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "6px", padding: "2px 8px", cursor: "pointer", fontSize: "0.72rem", fontFamily: "inherit", fontWeight: 600 }}>
-                          {answerFor === q.id ? "Cancel" : "Answer"}
-                        </button>
-                      )}
-                      {currentUser?.id === q.userId && (
-                        <button onClick={() => deleteQuestion(q.id, ev.id)} style={{ background: "none", border: "none", color: T.stoneL, cursor: "pointer", fontSize: "0.75rem" }}>Remove</button>
-                      )}
-                    </div>
-                  </div>
+                  <p style={{ color: T.text, fontSize: "0.875rem", margin: 0, fontWeight: 600, lineHeight: 1.5 }}>{q.question}</p>
                 </div>
-                {q.answer && (
-                  <div style={{ display: "flex", gap: "10px", background: `${T.green1}08`, borderRadius: "10px", padding: "11px 13px", borderLeft: `3px solid ${T.green1}` }}>
-                    <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: T.green1, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.72rem", flexShrink: 0, marginTop: "1px" }}>A</div>
-                    <p style={{ color: T.textMid, fontSize: "0.875rem", margin: 0, lineHeight: 1.6 }}>{q.answer}</p>
-                  </div>
-                )}
-                {answerFor === q.id && dashUnlocked && (
-                  <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
-                    <textarea value={answerText} onChange={e => setAnswerText(e.target.value)} placeholder="Type your answer…" rows={2}
-                      style={{ flex: 1, padding: "9px 12px", borderRadius: "9px", border: `1px solid ${T.border}`, background: "#fff", fontFamily: "inherit", fontSize: "0.85rem", resize: "vertical", outline: "none" }} />
-                    <button onClick={() => handleAnswer(q.id)}
-                      style={{ background: T.green1, color: "#fff", border: "none", borderRadius: "9px", padding: "9px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, alignSelf: "flex-end" }}>Post</button>
-                  </div>
-                )}
+                <div style={{ display: "flex", gap: "10px", background: `${T.green1}08`, borderRadius: "10px", padding: "11px 13px", borderLeft: `3px solid ${T.green1}` }}>
+                  <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: T.green1, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.72rem", flexShrink: 0, marginTop: "1px" }}>A</div>
+                  <p style={{ color: T.textMid, fontSize: "0.875rem", margin: 0, lineHeight: 1.6 }}>{q.answer}</p>
+                </div>
               </div>
             ))}
           </div>
