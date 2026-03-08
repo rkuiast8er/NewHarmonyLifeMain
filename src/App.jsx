@@ -3044,14 +3044,17 @@ function DiscoverView() {
           {/* Fade edge hint for horizontal scroll */}
           <div style={{ position: "absolute", right: 0, top: 0, bottom: "4px", width: "40px", background: `linear-gradient(to right, transparent, ${T.bg})`, pointerEvents: "none" }} />
         </div>
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-          {activeDateItems.map(item => {
-            const val = item.id.replace("date-", "");
-            return <button key={item.id} onClick={() => setFilterDate(filterDate === val ? "all" : val)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterDate === val ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterDate === val ? `${T.earthL}30` : "transparent", color: filterDate === val ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>{item.label}</button>;
-          })}
-          {showFreeBtn && <button onClick={() => setFilterPrice(filterPrice === "free" ? "all" : "free")} style={{ padding: "6px 14px", borderRadius: "100px", border: filterPrice === "free" ? `1px solid ${T.green2}` : `1px solid ${T.border}`, background: filterPrice === "free" ? T.green5 : "transparent", color: filterPrice === "free" ? T.green1 : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🎁 Free</button>}
-          {following.size > 0 && <button onClick={() => setFilterFollowing(f => !f)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterFollowing ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterFollowing ? `${T.earth}18` : "transparent", color: filterFollowing ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🔔 Following</button>}
-        </div>
+        {(sortConfig.enabled || following.size > 0) && (
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+            {sortConfig.enabled && activeDateItems.map(item => {
+              const label = item.label.toLowerCase();
+              const val = label.includes("today") ? "today" : label.includes("week") ? "week" : label.includes("month") ? "month" : item.id.replace(/^date-/, "");
+              return <button key={item.id} onClick={() => setFilterDate(filterDate === val ? "all" : val)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterDate === val ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterDate === val ? `${T.earthL}30` : "transparent", color: filterDate === val ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>{item.label}</button>;
+            })}
+            {sortConfig.enabled && showFreeBtn && <button onClick={() => setFilterPrice(filterPrice === "free" ? "all" : "free")} style={{ padding: "6px 14px", borderRadius: "100px", border: filterPrice === "free" ? `1px solid ${T.green2}` : `1px solid ${T.border}`, background: filterPrice === "free" ? T.green5 : "transparent", color: filterPrice === "free" ? T.green1 : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🎁 Free</button>}
+            {following.size > 0 && <button onClick={() => setFilterFollowing(f => !f)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterFollowing ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterFollowing ? `${T.earth}18` : "transparent", color: filterFollowing ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🔔 Following</button>}
+          </div>
+        )}
       </div>
       {/* Vibe tag filter row */}
       {vibeConfig.enabled && vibeConfig.items.length > 0 && (
@@ -4777,6 +4780,7 @@ function DashSettingsPanel() {
   const [vibeAddOpen, setVibeAddOpen] = useState(false);
 
   const saveVibes = () => { saveVibeConfig({ enabled: vibeEnabled, items: vibeItems }); showToast("Vibe settings saved ✓"); };
+  const toggleVibeEnabled = () => { const next = !vibeEnabled; setVibeEnabled(next); saveVibeConfig({ enabled: next, items: vibeItems }); };
   const updateVibeItem = (id, field, val) => setVibeItems(prev => prev.map(v => v.id === id ? { ...v, [field]: val } : v));
   const removeVibeItem = (id) => setVibeItems(prev => prev.filter(v => v.id !== id));
   const addVibeItem = () => {
@@ -4799,6 +4803,7 @@ function DashSettingsPanel() {
   const [sortEditId, setSortEditId] = useState(null);
 
   const saveSorts = () => { saveSortConfig({ enabled: sortEnabled, items: sortItems }); showToast("Sort settings saved ✓"); };
+  const toggleSortEnabled = () => { const next = !sortEnabled; setSortEnabled(next); saveSortConfig({ enabled: next, items: sortItems }); };
   const updateSortItem = (id, field, val) => setSortItems(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
   const removeSortItem = (id) => setSortItems(prev => prev.filter(s => s.id !== id));
   const addSortItem = () => {
@@ -4847,7 +4852,7 @@ function DashSettingsPanel() {
             <h3 style={{ color: T.text, margin: "0 0 4px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>🏷️ Vibe Tags</h3>
             <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: 0, lineHeight: 1.5 }}>Filter badges shown on the Discover page in the vibe filter row.</p>
           </div>
-          <TogglePill on={vibeEnabled} onToggle={() => setVibeEnabled(v => !v)} />
+          <TogglePill on={vibeEnabled} onToggle={toggleVibeEnabled} />
         </div>
         <StatusBadge on={vibeEnabled} />
 
@@ -4901,7 +4906,7 @@ function DashSettingsPanel() {
             <h3 style={{ color: T.text, margin: "0 0 4px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>🔘 Discover Sort Buttons</h3>
             <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: 0, lineHeight: 1.5 }}>Quick-filter buttons on Discover (e.g. Today, This Week, Free). Date group = date filter; Price group = free-events toggle.</p>
           </div>
-          <TogglePill on={sortEnabled} onToggle={() => setSortEnabled(v => !v)} />
+          <TogglePill on={sortEnabled} onToggle={toggleSortEnabled} />
         </div>
         <StatusBadge on={sortEnabled} />
 
