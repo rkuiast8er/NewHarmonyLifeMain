@@ -1061,15 +1061,10 @@ function AppProvider({ children }) {
 
     if (error) {
       const msg = error.message || "Signup failed. Please try again.";
-      const isExisting = msg.toLowerCase().includes("already") || msg.toLowerCase().includes("registered");
-      const isWeak = msg.toLowerCase().includes("password") || msg.toLowerCase().includes("weak");
-      const isEmail = msg.toLowerCase().includes("email") || msg.toLowerCase().includes("invalid");
-      let friendly = msg;
-      if (isExisting) friendly = "An account with this email already exists. Try signing in instead.";
-      else if (isWeak) friendly = "Password is too weak. Please use at least 6 characters with a mix of letters and numbers.";
-      else if (isEmail) friendly = "Please enter a valid email address.";
       console.error("[NH handleSignup] error:", msg);
-      setAuthErrors({ email: friendly });
+      // Only override message for one unambiguous case — duplicate account
+      const isExisting = msg.toLowerCase().includes("already registered") || msg.toLowerCase().includes("user already exists");
+      setAuthErrors({ email: isExisting ? "An account with this email already exists. Try signing in instead." : msg });
       return;
     }
 
