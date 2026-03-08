@@ -289,10 +289,10 @@ const isExpired = (ev) => {
   return end < new Date().toISOString().split("T")[0];
 };
 const spotsLeft = (ev) => {
-  if (ev.ticketTiers && ev.ticketTiers.length > 0) {
-    return ev.ticketTiers.reduce((sum, t) => sum + Math.max(0, t.capacity - t.sold), 0);
-  }
-  return ev.capacity - ev.registered;
+  // Always use the single event-level capacity minus total sold (shared pool across all tiers)
+  const cap = ev.capacity || totalCapacity(ev);
+  const sold = totalSold(ev);
+  return Math.max(0, cap - sold);
 };
 
 // ─── RECURRING EVENT HELPERS ──────────────────────────────────────────────────
@@ -458,6 +458,51 @@ function Field({ label, error, children }) {
   );
 }
 
+// Reusable password input with show/hide eyeball toggle
+function PasswordInput({ value, onChange, onKeyDown, placeholder, style, error }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        style={{ ...style, paddingRight: "42px" }}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible(v => !v)}
+        style={{
+          position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
+          background: "none", border: "none", cursor: "pointer", padding: "2px 4px",
+          color: visible ? T.green1 : T.stoneL, fontSize: "1.05rem", lineHeight: 1,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+        title={visible ? "Hide password" : "Show password"}
+        tabIndex={-1}
+      >
+        {visible
+          ? /* eye-slash */ (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          )
+          : /* eye */ (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          )
+        }
+      </button>
+    </div>
+  );
+}
+
 // ─── CONTEXT ──────────────────────────────────────────────────────────────────
 const AppContext = createContext(null);
 
@@ -473,6 +518,44 @@ function AppProvider({ children }) {
   const [checkoutInfo, setCheckoutInfo] = useState({ firstName: "", lastName: "", email: "", phone: "", address: "", city: "", state: "", zip: "" });
   const [customAnswers, setCustomAnswers] = useState({});
   const [resendApiKey, setResendApiKey] = useState(localStorage.getItem("nh_resend_key") || "");
+
+  // ── Site-wide configurable vibe tags ──────────────────────────────────────
+  const _defaultVibeConfig = {
+    enabled: true,
+    items: [
+      { id: "dog-friendly",    emoji: "🐾", label: "Dog-Friendly" },
+      { id: "kid-friendly",    emoji: "👶", label: "Kid-Friendly" },
+      { id: "bring-a-blanket", emoji: "🧺", label: "Bring a Blanket" },
+      { id: "limited-spots",   emoji: "⚡", label: "Limited Spots" },
+      { id: "rain-or-shine",   emoji: "🌦️", label: "Rain or Shine" },
+      { id: "all-ages",        emoji: "👨‍👩‍👧", label: "All Ages" },
+      { id: "21-plus",         emoji: "🍺", label: "21+" },
+      { id: "outdoors",        emoji: "🌿", label: "Outdoors" },
+      { id: "indoor",          emoji: "🏠", label: "Indoor" },
+      { id: "free-parking",    emoji: "🅿️", label: "Free Parking" },
+      { id: "wheelchair",      emoji: "♿", label: "Accessible" },
+      { id: "bring-your-own",  emoji: "🎒", label: "Bring Your Own" },
+    ],
+  };
+  const [vibeConfig, setVibeConfig] = useState(() => {
+    try { const s = localStorage.getItem("nh_vibe_config"); return s ? JSON.parse(s) : _defaultVibeConfig; } catch { return _defaultVibeConfig; }
+  });
+  const saveVibeConfig = (cfg) => { setVibeConfig(cfg); localStorage.setItem("nh_vibe_config", JSON.stringify(cfg)); };
+
+  // ── Discover sort / filter buttons config ─────────────────────────────────
+  const _defaultSortConfig = {
+    enabled: true,
+    items: [
+      { id: "date-today",  label: "Today",      group: "date" },
+      { id: "date-week",   label: "This Week",  group: "date" },
+      { id: "date-month",  label: "This Month", group: "date" },
+      { id: "price-free",  label: "🎁 Free",    group: "price" },
+    ],
+  };
+  const [sortConfig, setSortConfig] = useState(() => {
+    try { const s = localStorage.getItem("nh_sort_config"); return s ? JSON.parse(s) : _defaultSortConfig; } catch { return _defaultSortConfig; }
+  });
+  const saveSortConfig = (cfg) => { setSortConfig(cfg); localStorage.setItem("nh_sort_config", JSON.stringify(cfg)); };
   const [checkoutErrors, setCheckoutErrors] = useState({});
   const [checkoutStep, setCheckoutStep] = useState(1);
   const [paymentForm, setPaymentForm] = useState({ cardName: "", cardNum: "", expiry: "", cvv: "" });
@@ -795,7 +878,7 @@ function AppProvider({ children }) {
   // ─── AUTH ──────────────────────────────────────────────────────────────────
   const openAuth = (mode = "login") => {
     setAuthMode(mode);
-    setAuthForm({ firstName: "", lastName: "", email: "", phone: "", city: "", state: "", password: "", confirm: "" });
+    setAuthForm({ firstName: "", lastName: "", email: "", phone: "", city: "", state: "", password: "", confirm: "", emailOptIn: true, agreedToTerms: false });
     setAuthErrors({});
     setAuthModal(true);
   };
@@ -806,6 +889,7 @@ function AppProvider({ children }) {
       if (!authForm.lastName.trim()) e.lastName = "Last name required";
       if (!authForm.phone.trim()) e.phone = "Phone required";
     }
+    if (authMode === "signup" && !authForm.agreedToTerms) e.agreedToTerms = "You must agree to the Terms & Privacy Policy to continue";
     if (!authForm.email.includes("@")) e.email = "Valid email required";
     if (!authForm.password || authForm.password.length < 6) e.password = "Password must be 6+ characters";
     if (authMode === "signup" && authForm.password !== authForm.confirm) e.confirm = "Passwords do not match";
@@ -841,7 +925,7 @@ function AppProvider({ children }) {
     });
     if (error) { setAuthErrors({ email: error.message }); return; }
     if (data?.user) {
-      const profile = { id: data.user.id, first_name: authForm.firstName, last_name: authForm.lastName, email: authForm.email, phone: authForm.phone, city: authForm.city, state: authForm.state, avatar_color: "#40916C", is_admin: false };
+      const profile = { id: data.user.id, first_name: authForm.firstName, last_name: authForm.lastName, email: authForm.email, phone: authForm.phone, city: authForm.city, state: authForm.state, avatar_color: "#40916C", is_admin: false, email_opt_in: authForm.emailOptIn };
       // Write profile row so login and updateProfile work correctly
       await supabase.from("profiles").insert(profile);
       setCurrentUser(profile);
@@ -864,9 +948,10 @@ function AppProvider({ children }) {
       phone: updates.phone,
       city: updates.city,
       state: updates.state,
+      email_opt_in: updates.emailOptIn,
     }).eq("id", currentUser.id);
     if (error) { showToast("Could not save profile: " + error.message, "warn"); return; }
-    setCurrentUser(prev => ({ ...prev, first_name: updates.firstName, last_name: updates.lastName, phone: updates.phone, city: updates.city, state: updates.state }));
+    setCurrentUser(prev => ({ ...prev, first_name: updates.firstName, last_name: updates.lastName, phone: updates.phone, city: updates.city, state: updates.state, email_opt_in: updates.emailOptIn }));
     showToast("Profile updated ✓");
   };
 
@@ -1472,7 +1557,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     if (!validateEventForm()) return;
     const tags = form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
     const tiers = (form.ticketTiers || []);
-    const totalCap = tiers.reduce((s, t) => s + (parseInt(t.capacity) || 0), 0);
+    const totalCap = parseInt(form.capacity) || 50;
     const evPayload = {
       title: form.title, category: form.category,
       start_date: form.startDate, end_date: form.endDate || null,
@@ -1504,14 +1589,14 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     if (editingId) {
       // Snapshot old event state before saving so we can detect capacity increases
       const oldEvent = events.find(e => e.id === editingId);
-      const oldCapacity = oldEvent ? (oldEvent.ticketTiers?.reduce((s, t) => s + t.capacity, 0) || oldEvent.capacity || 0) : 0;
+      const oldCapacity = oldEvent ? (oldEvent.capacity || 0) : 0;
       const oldSold = oldEvent ? (oldEvent.ticketTiers?.reduce((s, t) => s + t.sold, 0) || oldEvent.registered || 0) : 0;
       const oldSpotsLeft = Math.max(0, oldCapacity - oldSold);
 
       await supabase.from("events").update(evPayload).eq("id", editingId);
       // Delete old tiers and re-insert
       await supabase.from("ticket_tiers").delete().eq("event_id", editingId);
-      if (tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: editingId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: parseInt(t.capacity) || 10, sold: t.sold || 0, sort_order: i })));
+      if (tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: editingId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: totalCap, sold: t.sold || 0, sort_order: i })));
 
       // Detect important changes that warrant notifying registered attendees
       const dateChanged = oldEvent && (oldEvent.startDate !== form.startDate || oldEvent.endDate !== (form.endDate || null) || oldEvent.time !== form.time);
@@ -1631,7 +1716,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     } else {
       const { data: newEv } = await supabase.from("events").insert({ ...evPayload, registered: 0 });
       const newId = newEv?.[0]?.id;
-      if (newId && tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: newId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: parseInt(t.capacity) || 10, sold: 0, sort_order: i })));
+      if (newId && tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: newId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: totalCap, sold: 0, sort_order: i })));
       // If private, store the generated token back in form state so the copy-link UI shows immediately
       if (form.isPrivate && evPayload.invite_token) {
         setForm(f => ({ ...f, inviteToken: evPayload.invite_token }));
@@ -1817,6 +1902,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     scheduleEventReminders,
     referralStats,
     customAnswers, setCustomAnswers,
+    vibeConfig, saveVibeConfig,
+    sortConfig, saveSortConfig,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -2177,9 +2264,92 @@ function CartSidebar() {
   );
 }
 
+// ─── TERMS & PRIVACY MODAL ────────────────────────────────────────────────────
+function TermsModal({ onClose }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <div style={{ background: T.bgCard, borderRadius: "20px", width: "100%", maxWidth: "600px", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 70px rgba(0,0,0,0.35)", position: "relative" }}>
+        {/* Header */}
+        <div style={{ padding: "24px 28px 18px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div>
+            <h2 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.3rem", margin: "0 0 2px" }}>Terms of Service & Privacy Policy</h2>
+            <div style={{ color: T.stoneL, fontSize: "0.75rem" }}>New Harmony Life · Last updated {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</div>
+          </div>
+          <button onClick={onClose} style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "50%", width: "34px", height: "34px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", flexShrink: 0 }}>✕</button>
+        </div>
+        {/* Scrollable body */}
+        <div style={{ overflowY: "auto", padding: "24px 28px", flex: 1 }}>
+          {[
+            {
+              heading: "1. Acceptance of Terms",
+              body: "By creating an account or using New Harmony Life Events (the "Service"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the Service.",
+            },
+            {
+              heading: "2. Who We Are",
+              body: "New Harmony Life is a community events platform serving the Loess Hills region of Iowa. We connect local organizers with attendees for festivals, workshops, markets, wellness events, and more. Questions? Email us at hello@newharmonylife.com.",
+            },
+            {
+              heading: "3. Your Account",
+              body: "You are responsible for keeping your login credentials secure and for all activity under your account. You must be 13 years of age or older to create an account. Please provide accurate information when registering — we use it to send you ticket confirmations and event updates.",
+            },
+            {
+              heading: "4. Tickets & Purchases",
+              body: "All ticket sales are final unless the event's published refund policy states otherwise. Refund eligibility is set by the individual event organizer and displayed on each event page. New Harmony Life is not responsible for event cancellations by third-party organizers, but we will communicate changes to registered attendees as promptly as possible.",
+            },
+            {
+              heading: "5. Vendor Applications",
+              body: "Vendor applications submitted through the platform are reviewed by event organizers. Submitting an application does not guarantee acceptance. Vendors are responsible for obtaining any required licenses, permits, food-handling certifications, and for collecting applicable sales tax.",
+            },
+            {
+              heading: "6. Acceptable Use",
+              body: "You agree not to misuse the Service — including attempting to circumvent capacity limits, submitting false registrations, harassing other community members, or using the platform for unlawful purposes. We reserve the right to suspend accounts that violate these terms.",
+            },
+            {
+              heading: "7. Privacy & Your Data",
+              body: "We collect your name, email, phone number, and city/state when you register. This information is used solely to manage your account, process ticket purchases, and (with your consent) send you updates about upcoming New Harmony Life events. We do not sell your personal data to third parties. You may withdraw marketing consent at any time in your account settings.",
+            },
+            {
+              heading: "8. Email Communications",
+              body: "By opting in to our mailing list, you consent to receive occasional emails about upcoming events, community news, and seasonal updates from New Harmony Life. You can unsubscribe at any time by updating your notification preferences in My Account, or by clicking the unsubscribe link in any email we send.",
+            },
+            {
+              heading: "9. Photos & Content",
+              body: "By uploading photos to an event gallery, you grant New Harmony Life a non-exclusive license to display and share that content in connection with the event and our community platforms. You retain ownership of your photos. By registering as a vendor, you grant permission for your business name, logo, and photos to be used in event promotions.",
+            },
+            {
+              heading: "10. Limitation of Liability",
+              body: "New Harmony Life and the Loess Hills Elysian Prairie Restoration and Conservation Project are not liable for personal injury, loss, or damage sustained at events listed on this platform. Attendees and vendors participate at their own risk. Our total liability for any claim arising from use of the Service is limited to the amount you paid for the relevant ticket or registration.",
+            },
+            {
+              heading: "11. Changes to These Terms",
+              body: "We may update these Terms from time to time. When we do, we'll update the date at the top of this page. Continued use of the Service after changes are posted constitutes your acceptance of the revised Terms.",
+            },
+            {
+              heading: "12. Contact Us",
+              body: "If you have questions about these Terms or our privacy practices, please reach out at hello@newharmonylife.com or write to us at New Harmony Life, Castana, IA.",
+            },
+          ].map(({ heading, body }) => (
+            <div key={heading} style={{ marginBottom: "20px" }}>
+              <div style={{ color: T.green1, fontWeight: 700, fontSize: "0.88rem", marginBottom: "5px" }}>{heading}</div>
+              <p style={{ color: T.textSoft, fontSize: "0.85rem", lineHeight: 1.75, margin: 0 }}>{body}</p>
+            </div>
+          ))}
+        </div>
+        {/* Footer */}
+        <div style={{ padding: "16px 28px", borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <button onClick={onClose} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "10px", padding: "12px", fontFamily: "inherit", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer" }}>
+            Close ✓
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── AUTH MODAL ───────────────────────────────────────────────────────────────
 function AuthModal() {
   const { authModal, setAuthModal, authMode, setAuthMode, authForm, setAuthForm, authErrors, setAuthErrors, handleLogin, handleSignup } = useApp();
+  const [showTerms, setShowTerms] = useState(false);
   if (!authModal) return null;
   const isSignup = authMode === "signup";
   return (
@@ -2211,9 +2381,44 @@ function AuthModal() {
             </>
           )}
           <Field label="Email Address *" error={authErrors.email}><input type="email" value={authForm.email} onChange={e => setAuthForm({ ...authForm, email: e.target.value })} style={inp(authErrors.email)} placeholder="you@example.com" /></Field>
-          <Field label="Password *" error={authErrors.password}><input type="password" value={authForm.password} onChange={e => setAuthForm({ ...authForm, password: e.target.value })} style={inp(authErrors.password)} placeholder={isSignup ? "6+ characters" : "Your password"} onKeyDown={e => { if (e.key === "Enter") { isSignup ? handleSignup() : handleLogin(); } }} /></Field>
-          {isSignup && <Field label="Confirm Password *" error={authErrors.confirm}><input type="password" value={authForm.confirm} onChange={e => setAuthForm({ ...authForm, confirm: e.target.value })} style={inp(authErrors.confirm)} placeholder="Re-enter password" onKeyDown={e => { if (e.key === "Enter") handleSignup(); }} /></Field>}
+          <Field label="Password *" error={authErrors.password}><PasswordInput value={authForm.password} onChange={e => setAuthForm({ ...authForm, password: e.target.value })} style={inp(authErrors.password)} placeholder={isSignup ? "6+ characters" : "Your password"} onKeyDown={e => { if (e.key === "Enter") { isSignup ? handleSignup() : handleLogin(); } }} /></Field>
+          {isSignup && <Field label="Confirm Password *" error={authErrors.confirm}><PasswordInput value={authForm.confirm} onChange={e => setAuthForm({ ...authForm, confirm: e.target.value })} style={inp(authErrors.confirm)} placeholder="Re-enter password" onKeyDown={e => { if (e.key === "Enter") handleSignup(); }} /></Field>}
+
+          {/* Email opt-in toggle */}
+          {isSignup && (
+            <div onClick={() => setAuthForm({ ...authForm, emailOptIn: !authForm.emailOptIn })}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: authForm.emailOptIn ? `${T.green1}08` : T.cream, border: `1px solid ${authForm.emailOptIn ? T.green3 : T.border}`, borderRadius: "10px", padding: "12px 14px", cursor: "pointer", userSelect: "none", transition: "all 0.15s" }}>
+              <div>
+                <div style={{ color: T.textMid, fontWeight: 600, fontSize: "0.85rem" }}>📬 Notify me about upcoming events</div>
+                <div style={{ color: T.stoneL, fontSize: "0.75rem", marginTop: "1px" }}>Occasional emails about New Harmony Life events &amp; community news</div>
+              </div>
+              <div style={{ width: "44px", height: "24px", borderRadius: "12px", background: authForm.emailOptIn ? T.green1 : "#D1D5DB", flexShrink: 0, marginLeft: "12px", position: "relative", transition: "background 0.2s" }}>
+                <div style={{ position: "absolute", top: "3px", left: authForm.emailOptIn ? "23px" : "3px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+              </div>
+            </div>
+          )}
+
+          {/* Terms agreement checkbox */}
+          {isSignup && (
+            <div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 14px", background: authErrors.agreedToTerms ? "#FEF2F2" : T.cream, border: `1px solid ${authErrors.agreedToTerms ? "#FECACA" : T.border}`, borderRadius: "10px", cursor: "pointer" }}
+                onClick={() => setAuthForm({ ...authForm, agreedToTerms: !authForm.agreedToTerms })}>
+                <div style={{ width: "18px", height: "18px", borderRadius: "4px", border: `2px solid ${authForm.agreedToTerms ? T.green1 : T.stoneL}`, background: authForm.agreedToTerms ? T.green1 : "#fff", flexShrink: 0, marginTop: "1px", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+                  {authForm.agreedToTerms && <svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7.5L10 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </div>
+                <div style={{ fontSize: "0.8rem", color: T.textMid, lineHeight: 1.5 }}>
+                  I agree to the{" "}
+                  <button type="button" onClick={e => { e.stopPropagation(); setShowTerms(true); }}
+                    style={{ background: "none", border: "none", color: T.green1, cursor: "pointer", fontFamily: "inherit", fontSize: "0.8rem", fontWeight: 700, padding: 0, textDecoration: "underline" }}>
+                    Terms of Service &amp; Privacy Policy
+                  </button>
+                </div>
+              </div>
+              {authErrors.agreedToTerms && <div style={{ color: T.warn, fontSize: "0.75rem", marginTop: "4px" }}>⚠ {authErrors.agreedToTerms}</div>}
+            </div>
+          )}
         </div>
+        {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
         <button onClick={isSignup ? handleSignup : handleLogin} style={{ width: "100%", marginTop: "1.25rem", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 18px ${T.green1}44` }}>
           {isSignup ? "Create My Account 🌿" : "Sign In →"}
         </button>
@@ -2228,7 +2433,6 @@ function AuthModal() {
             </div>
           </>
         )}
-        {isSignup && <div style={{ textAlign: "center", marginTop: "0.75rem", color: T.textSoft, fontSize: "0.75rem", lineHeight: 1.5 }}>By creating an account you agree to our Terms of Service and Privacy Policy.</div>}
       </div>
     </div>
   );
@@ -2433,9 +2637,110 @@ function PhotoCarousel({ photos, color }) {
   );
 }
 
+// ─── TIER PICKER POPOVER ──────────────────────────────────────────────────────
+// Shown when "Add to Cart" is clicked on an EventCard — mirrors the detail view's
+// tier selector layout so the experience is consistent.
+function TierPickerPopover({ ev, onClose }) {
+  const { addToCart } = useApp();
+  const tiers = ev.ticketTiers || [];
+  const [activeTierId, setActiveTierId] = useState(tiers[0]?.id || null);
+  const [qty, setQty] = useState(1);
+  const selectedTier = tiers.find(t => t.id === activeTierId) || tiers[0] || null;
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = e => {
+      if (!e.target.closest("[data-tier-picker]")) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  if (!selectedTier) return null;
+
+  // Shared-pool: available spots = event capacity minus total sold across all tiers
+  const eventSpotsLeft = spotsLeft(ev);
+  const maxQty = eventSpotsLeft;
+
+  return (
+    <div
+      data-tier-picker
+      onClick={e => e.stopPropagation()}
+      style={{
+        position: "absolute", bottom: "calc(100% + 8px)", left: 0, right: 0,
+        background: "#fff", border: `1px solid ${T.border}`, borderRadius: "14px",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.18)", zIndex: 100, padding: "16px",
+        animation: "slideUp 0.18s ease",
+      }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+        <div style={{ color: T.stoneL, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Select Ticket Type</div>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: T.stoneL, cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: "0 2px" }}>✕</button>
+      </div>
+
+      {/* Tier list — same style as DetailView sidebar */}
+      <div style={{ display: "grid", gap: "8px", marginBottom: "14px" }}>
+        {tiers.map(tier => {
+          const isFull = eventSpotsLeft === 0;
+          const isSel = activeTierId === tier.id;
+          return (
+            <div key={tier.id}
+              onClick={() => { if (!isFull) { setActiveTierId(tier.id); setQty(1); } }}
+              style={{
+                border: `2px solid ${isSel ? T.green2 : T.border}`, borderRadius: "12px",
+                padding: "10px 13px", cursor: isFull ? "default" : "pointer",
+                background: isSel ? `${T.green1}0A` : isFull ? T.bg : "#fff",
+                opacity: isFull ? 0.55 : 1, transition: "all 0.15s",
+              }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    {isSel && !isFull && <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: T.green2, flexShrink: 0 }} />}
+                    <span style={{ color: T.text, fontWeight: 700, fontSize: "0.86rem" }}>{tier.name}</span>
+                  </div>
+                  {tier.description && (
+                    <div style={{ color: T.textSoft, fontSize: "0.72rem", marginTop: "1px", lineHeight: 1.4 }}>{tier.description}</div>
+                  )}
+                </div>
+                <div style={{ color: tier.price === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "1rem", fontFamily: "'Lora',serif", flexShrink: 0, marginLeft: "10px" }}>
+                  {tier.price === 0 ? "Free" : `$${tier.price}`}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Quantity row */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+        <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Qty</div>
+        <button onClick={() => setQty(q => Math.max(1, q - 1))}
+          style={{ width: "30px", height: "30px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+        <span style={{ color: T.text, fontWeight: 700, fontSize: "1rem", minWidth: "22px", textAlign: "center" }}>{qty}</span>
+        <button onClick={() => setQty(q => Math.min(maxQty, q + 1))}
+          style={{ width: "30px", height: "30px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+        {selectedTier.price > 0 && (
+          <span style={{ color: T.earth, fontWeight: 700, fontSize: "0.88rem", marginLeft: "4px" }}>
+            ${(selectedTier.price * qty).toFixed(2)}
+          </span>
+        )}
+      </div>
+
+      {/* Add to cart CTA */}
+      <button
+        onClick={() => { addToCart(ev, qty, selectedTier); onClose(); }}
+        style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "10px", padding: "11px", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: `0 3px 12px ${T.green1}44` }}>
+        {selectedTier.price === 0 ? "Register Free 🌿" : `Add to Cart 🛒`}
+      </button>
+      <div style={{ color: T.stoneL, fontSize: "0.68rem", textAlign: "center", marginTop: "8px" }}>Instant confirmation · No hidden fees</div>
+    </div>
+  );
+}
+
 // ─── EVENT CARD ───────────────────────────────────────────────────────────────
 function EventCard({ ev }) {
   const { setSelectedId, setView, addToCart, setCartOpen, isInCart, isReg, joinWaitlist, toggleInterest, getInterest, currentUser, reviews } = useApp();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const full = spotsLeft(ev) === 0;
   const fp = ev.photos && ev.photos.length > 0 ? ev.photos[0] : null;
   const registered = isReg(ev.id);
@@ -2445,7 +2750,7 @@ function EventCard({ ev }) {
   const pctFull = cap > 0 ? Math.min(100, Math.round((sold / cap) * 100)) : 0;
   const almostFull = spots > 0 && spots <= 10;
   const lowestPrice = ev.ticketTiers && ev.ticketTiers.length > 0 ? Math.min(...ev.ticketTiers.map(t => t.price)) : (ev.price || 0);
-  const firstTier = ev.ticketTiers?.[0];
+  const anyInCart = (ev.ticketTiers || []).some(t => isInCart(ev.id, t.id)) || isInCart(ev.id);
   const shortDesc = ev.description && ev.description.length > 100 ? ev.description.slice(0, 97) + "…" : ev.description;
   const intr = getInterest(ev.id);
   const uid = currentUser?.id;
@@ -2524,12 +2829,18 @@ function EventCard({ ev }) {
           </div>
         </div>
       </div>
-      <div style={{ padding: "8px 16px 14px", marginTop: "auto" }}>
-        {registered ? <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px", textAlign: "center", color: T.green1, fontSize: "0.8rem", fontWeight: 700 }}>✓ Registered</div>
-          : isInCart(ev.id, firstTier?.id) ? <button onClick={e => { e.stopPropagation(); setCartOpen(true); }} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart — View Cart 🛒</button>
-          : full ? <button onClick={e => { e.stopPropagation(); joinWaitlist(ev.id); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.gold},#C8940F)`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>🔔 Join Waitlist</button>
-          : <button onClick={e => { e.stopPropagation(); addToCart(ev, 1, firstTier); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{lowestPrice === 0 ? "Register Free 🌿" : "Add to Cart 🛒"}</button>
+      <div style={{ padding: "8px 16px 14px", marginTop: "auto", position: "relative" }}>
+        {registered
+          ? <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px", textAlign: "center", color: T.green1, fontSize: "0.8rem", fontWeight: 700 }}>✓ Registered</div>
+          : anyInCart
+          ? <button onClick={e => { e.stopPropagation(); setCartOpen(true); }} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart — View Cart 🛒</button>
+          : full
+          ? <button onClick={e => { e.stopPropagation(); joinWaitlist(ev.id); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.gold},#C8940F)`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>🔔 Join Waitlist</button>
+          : <button onClick={e => { e.stopPropagation(); setPickerOpen(true); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{lowestPrice === 0 ? "Register Free 🌿" : "Add to Cart 🛒"}</button>
         }
+        {pickerOpen && (
+          <TierPickerPopover ev={ev} onClose={() => setPickerOpen(false)} />
+        )}
       </div>
     </div>
   );
@@ -2695,9 +3006,11 @@ function CalendarView() {
 
 // ─── DISCOVER VIEW ────────────────────────────────────────────────────────────
 function DiscoverView() {
-  const { search, setSearch, filterCat, setFilterCat, filterDate, setFilterDate, filterPrice, setFilterPrice, filterVibe, setFilterVibe, filteredEvents, activeEvents, archivedEvents, following } = useApp();
+  const { search, setSearch, filterCat, setFilterCat, filterDate, setFilterDate, filterPrice, setFilterPrice, filterVibe, setFilterVibe, filteredEvents, activeEvents, archivedEvents, following, vibeConfig, sortConfig } = useApp();
   const [filterFollowing, setFilterFollowing] = useState(false);
   const toggleVibe = (id) => setFilterVibe(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
+  const activeDateItems = sortConfig.enabled ? sortConfig.items.filter(i => i.group === "date") : [];
+  const showFreeBtn = sortConfig.enabled && sortConfig.items.some(i => i.group === "price" && i.id === "price-free");
   const activeFilterCount = (filterCat !== "All" ? 1 : 0) + (filterDate !== "all" ? 1 : 0) + (filterPrice !== "all" ? 1 : 0) + (filterFollowing ? 1 : 0) + filterVibe.length;
   const clearAll = () => { setSearch(""); setFilterCat("All"); setFilterDate("all"); setFilterPrice("all"); setFilterFollowing(false); setFilterVibe([]); };
   const displayEvents = filterFollowing ? filteredEvents.filter(ev => following.has(ev.organizer)) : filteredEvents;
@@ -2732,24 +3045,29 @@ function DiscoverView() {
           <div style={{ position: "absolute", right: 0, top: 0, bottom: "4px", width: "40px", background: `linear-gradient(to right, transparent, ${T.bg})`, pointerEvents: "none" }} />
         </div>
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-          {[["all", "Any Date"], ["today", "Today"], ["week", "This Week"], ["month", "This Month"]].map(([v, l]) => <button key={v} onClick={() => setFilterDate(v)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterDate === v ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterDate === v ? `${T.earthL}30` : "transparent", color: filterDate === v ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>{l}</button>)}
-          <button onClick={() => setFilterPrice(filterPrice === "free" ? "all" : "free")} style={{ padding: "6px 14px", borderRadius: "100px", border: filterPrice === "free" ? `1px solid ${T.green2}` : `1px solid ${T.border}`, background: filterPrice === "free" ? T.green5 : "transparent", color: filterPrice === "free" ? T.green1 : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🎁 Free</button>
+          {activeDateItems.map(item => {
+            const val = item.id.replace("date-", "");
+            return <button key={item.id} onClick={() => setFilterDate(filterDate === val ? "all" : val)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterDate === val ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterDate === val ? `${T.earthL}30` : "transparent", color: filterDate === val ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>{item.label}</button>;
+          })}
+          {showFreeBtn && <button onClick={() => setFilterPrice(filterPrice === "free" ? "all" : "free")} style={{ padding: "6px 14px", borderRadius: "100px", border: filterPrice === "free" ? `1px solid ${T.green2}` : `1px solid ${T.border}`, background: filterPrice === "free" ? T.green5 : "transparent", color: filterPrice === "free" ? T.green1 : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🎁 Free</button>}
           {following.size > 0 && <button onClick={() => setFilterFollowing(f => !f)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterFollowing ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterFollowing ? `${T.earth}18` : "transparent", color: filterFollowing ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🔔 Following</button>}
         </div>
       </div>
       {/* Vibe tag filter row */}
-      <div style={{ padding: "0.5rem 2rem 0", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginRight: "2px" }}>Vibe:</span>
-        {VIBE_TAGS.map(vt => {
-          const active = filterVibe.includes(vt.id);
-          return (
-            <button key={vt.id} onClick={() => toggleVibe(vt.id)}
-              style={{ padding: "4px 11px", borderRadius: "100px", border: active ? `1px solid ${T.green1}` : `1px solid ${T.border}`, background: active ? T.green5 : "transparent", color: active ? T.green1 : T.textSoft, fontSize: "0.76rem", cursor: "pointer", fontFamily: "inherit", fontWeight: active ? 700 : 400, display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
-              {vt.emoji} {vt.label}
-            </button>
-          );
-        })}
-      </div>
+      {vibeConfig.enabled && vibeConfig.items.length > 0 && (
+        <div style={{ padding: "0.5rem 2rem 0", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginRight: "2px" }}>Vibe:</span>
+          {vibeConfig.items.map(vt => {
+            const active = filterVibe.includes(vt.id);
+            return (
+              <button key={vt.id} onClick={() => toggleVibe(vt.id)}
+                style={{ padding: "4px 11px", borderRadius: "100px", border: active ? `1px solid ${T.green1}` : `1px solid ${T.border}`, background: active ? T.green5 : "transparent", color: active ? T.green1 : T.textSoft, fontSize: "0.76rem", cursor: "pointer", fontFamily: "inherit", fontWeight: active ? 700 : 400, display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+                {vt.emoji} {vt.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div style={{ padding: "1rem 2rem 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
         <div style={{ color: T.textSoft, fontSize: "0.85rem" }}>
           {filteredEvents.length} event{filteredEvents.length !== 1 ? "s" : ""} found
@@ -2998,12 +3316,11 @@ function DetailView() {
           {ev.privatePassword ? (
             <>
               <p style={{ color: T.textSoft, marginBottom: "1.5rem", fontSize: "0.9rem" }}>This event requires a password — or an invite link from the organizer.</p>
-              <input
-                type="password"
-                placeholder="Enter event password"
+              <PasswordInput
                 value={privateInput}
                 onChange={e => { setPrivateInput(e.target.value); setPrivateError(false); }}
                 onKeyDown={e => { if (e.key === "Enter") { if (privateInput === ev.privatePassword) setPrivateUnlocked(true); else setPrivateError(true); }}}
+                placeholder="Enter event password"
                 style={{ width: "100%", padding: "12px 14px", borderRadius: "10px", border: `1px solid ${privateError ? T.warn : T.border}`, background: T.cream, fontSize: "0.95rem", boxSizing: "border-box", fontFamily: "inherit", marginBottom: "8px", outline: "none" }}
               />
               {privateError && <div style={{ color: T.warn, fontSize: "0.82rem", marginBottom: "8px" }}>⚠ Incorrect password</div>}
@@ -3142,22 +3459,18 @@ function DetailView() {
               <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Select Ticket Type</div>
               <div style={{ display: "grid", gap: "8px" }}>
                 {tiers.map(tier => {
-                  const tierLeft = Math.max(0, tier.capacity - tier.sold);
-                  const tierFull = tierLeft === 0;
                   const isSel = activeTierId === tier.id;
+                  const evFull = spotsLeft(ev) === 0;
                   return (
-                    <div key={tier.id} onClick={() => { if (!tierFull) { setSelectedTierId(tier.id); setRegQty(1); } }}
-                      style={{ border: `2px solid ${isSel ? T.green2 : T.border}`, borderRadius: "12px", padding: "11px 14px", cursor: tierFull ? "default" : "pointer", background: isSel ? `${T.green1}0A` : tierFull ? T.bg : "#fff", opacity: tierFull ? 0.55 : 1, transition: "all 0.15s" }}>
+                    <div key={tier.id} onClick={() => { if (!evFull) { setSelectedTierId(tier.id); setRegQty(1); } }}
+                      style={{ border: `2px solid ${isSel ? T.green2 : T.border}`, borderRadius: "12px", padding: "11px 14px", cursor: evFull ? "default" : "pointer", background: isSel ? `${T.green1}0A` : evFull ? T.bg : "#fff", opacity: evFull ? 0.55 : 1, transition: "all 0.15s" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            {isSel && !tierFull && <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: T.green2 }} />}
+                            {isSel && !evFull && <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: T.green2 }} />}
                             <span style={{ color: T.text, fontWeight: 700, fontSize: "0.88rem" }}>{tier.name}</span>
                           </div>
                           {tier.description && <div style={{ color: T.textSoft, fontSize: "0.73rem", marginTop: "1px" }}>{tier.description}</div>}
-                          <div style={{ color: tierFull ? T.warn : T.stoneL, fontSize: "0.7rem", marginTop: "3px", fontWeight: tierFull ? 700 : 400 }}>
-                            {tierFull ? "Sold out" : `${tierLeft} remaining`}
-                          </div>
                         </div>
                         <div style={{ color: tier.price === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "1.05rem", fontFamily: "'Lora',serif", flexShrink: 0, marginLeft: "8px" }}>
                           {tier.price === 0 ? "Free" : `$${tier.price}`}
@@ -3633,31 +3946,77 @@ function CreateView() {
             </div>
           </section>
           <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px" }}>
-            <h3 style={{ color: T.green1, margin: "0 0 18px", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Ticket Tiers & Organizer</h3>
+            <h3 style={{ color: T.green1, margin: "0 0 4px", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Tickets & Capacity</h3>
+            <p style={{ color: T.textSoft, fontSize: "0.8rem", margin: "0 0 20px", lineHeight: 1.5 }}>Set one total capacity for the event — this is the maximum number of attendees across all ticket types combined. Then add one or more pricing tiers (e.g. Early Bird, General, VIP).</p>
             <div style={{ display: "grid", gap: "16px" }}>
+
+              {/* ── Single total capacity ── */}
+              <Field label="Total Event Capacity *" error={formErrors.capacity}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <input
+                    type="number" min="1"
+                    value={form.capacity}
+                    onChange={e => setForm({ ...form, capacity: e.target.value })}
+                    placeholder="e.g. 200"
+                    style={{ ...inp(formErrors.capacity), maxWidth: "160px" }}
+                  />
+                  <span style={{ color: T.textSoft, fontSize: "0.82rem" }}>total seats available (shared across all tiers)</span>
+                </div>
+              </Field>
+
+              {/* ── Ticket tiers ── */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-                  <label style={{ color: T.textSoft, fontSize: "0.82rem", fontWeight: 600 }}>Ticket Tiers</label>
-                  <button type="button" onClick={() => setForm(f => ({ ...f, ticketTiers: [...(f.ticketTiers || []), { id: "t" + Date.now(), name: "", price: 0, capacity: 10, sold: 0, description: "" }] }))} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "5px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>+ Add Tier</button>
+                  <div>
+                    <label style={{ color: T.textSoft, fontSize: "0.82rem", fontWeight: 600 }}>Pricing Tiers</label>
+                    <div style={{ color: T.stoneL, fontSize: "0.74rem", marginTop: "1px" }}>Each tier shares the total capacity above — any mix of ticket types can be sold up to that limit.</div>
+                  </div>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, ticketTiers: [...(f.ticketTiers || []), { id: "t" + Date.now(), name: "", price: 0, capacity: parseInt(f.capacity) || 50, sold: 0, description: "" }] }))} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "5px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem", flexShrink: 0, marginLeft: "12px" }}>+ Add Tier</button>
                 </div>
                 <div style={{ display: "grid", gap: "10px" }}>
                   {(form.ticketTiers || []).map((tier, idx) => (
                     <div key={tier.id} style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "14px" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 80px", gap: "10px", marginBottom: "8px" }}>
-                        <input placeholder="Tier name (e.g. Early Bird, VIP)" value={tier.name} onChange={e => setForm(f => ({ ...f, ticketTiers: f.ticketTiers.map((t, i) => i === idx ? { ...t, name: e.target.value } : t) }))} style={{ ...inp(), fontSize: "0.85rem" }} />
-                        <input type="number" placeholder="Price $" min="0" step="0.01" value={tier.price} onChange={e => setForm(f => ({ ...f, ticketTiers: f.ticketTiers.map((t, i) => i === idx ? { ...t, price: parseFloat(e.target.value) || 0 } : t) }))} style={{ ...inp(), fontSize: "0.85rem" }} />
-                        <input type="number" placeholder="Qty" min="1" value={tier.capacity} onChange={e => setForm(f => ({ ...f, ticketTiers: f.ticketTiers.map((t, i) => i === idx ? { ...t, capacity: parseInt(e.target.value) || 1 } : t) }))} style={{ ...inp(), fontSize: "0.85rem" }} />
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                        <Field label="Tier Name">
+                          <input
+                            placeholder="e.g. Early Bird, General Admission, VIP"
+                            value={tier.name}
+                            onChange={e => setForm(f => ({ ...f, ticketTiers: f.ticketTiers.map((t, i) => i === idx ? { ...t, name: e.target.value } : t) }))}
+                            style={{ ...inp(), fontSize: "0.85rem" }}
+                          />
+                        </Field>
+                        <Field label="Ticket Price">
+                          <div style={{ position: "relative" }}>
+                            <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: T.textSoft, fontSize: "0.88rem", fontWeight: 600, pointerEvents: "none" }}>$</span>
+                            <input
+                              type="number" min="0" step="0.01"
+                              placeholder="0.00"
+                              value={tier.price}
+                              onChange={e => setForm(f => ({ ...f, ticketTiers: f.ticketTiers.map((t, i) => i === idx ? { ...t, price: parseFloat(e.target.value) || 0 } : t) }))}
+                              style={{ ...inp(), fontSize: "0.85rem", paddingLeft: "26px" }}
+                            />
+                          </div>
+                          {tier.price === 0 && <div style={{ color: T.green1, fontSize: "0.7rem", marginTop: "3px", fontWeight: 600 }}>Free admission</div>}
+                        </Field>
                       </div>
                       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                        <input placeholder="Short description (optional)" value={tier.description} onChange={e => setForm(f => ({ ...f, ticketTiers: f.ticketTiers.map((t, i) => i === idx ? { ...t, description: e.target.value } : t) }))} style={{ ...inp(), fontSize: "0.82rem", flex: 1 }} />
+                        <Field label="Short Description (optional)" style={{ flex: 1 }}>
+                          <input
+                            placeholder="e.g. Full 3-day access, Single day entry…"
+                            value={tier.description}
+                            onChange={e => setForm(f => ({ ...f, ticketTiers: f.ticketTiers.map((t, i) => i === idx ? { ...t, description: e.target.value } : t) }))}
+                            style={{ ...inp(), fontSize: "0.82rem" }}
+                          />
+                        </Field>
                         {(form.ticketTiers || []).length > 1 && (
-                          <button type="button" onClick={() => setForm(f => ({ ...f, ticketTiers: f.ticketTiers.filter((_, i) => i !== idx) }))} style={{ background: "#FEE2E2", color: T.warn, border: "none", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.8rem", flexShrink: 0 }}>✕</button>
+                          <button type="button" onClick={() => setForm(f => ({ ...f, ticketTiers: f.ticketTiers.filter((_, i) => i !== idx) }))} style={{ background: "#FEE2E2", color: T.warn, border: "none", borderRadius: "6px", padding: "6px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.8rem", flexShrink: 0, alignSelf: "flex-end", marginBottom: "1px" }}>✕ Remove</button>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+
               <Field label="Organizer Name *" error={formErrors.organizer}><input value={form.organizer} onChange={e => setForm({ ...form, organizer: e.target.value })} placeholder="Your name or organization" style={inp(formErrors.organizer)} /></Field>
             </div>
           </section>
@@ -3949,6 +4308,7 @@ function MyTicketsView() {
         phone: currentUser.phone || "",
         city: currentUser.city || "",
         state: currentUser.state || "",
+        emailOptIn: currentUser.email_opt_in !== false,
       });
     }
   }, [currentUser]);
@@ -4005,6 +4365,11 @@ function MyTicketsView() {
                       {(currentUser.city || currentUser.state) && <span>📍 {[currentUser.city, currentUser.state].filter(Boolean).join(", ")}</span>}
                     </div>
                   )}
+                  <div style={{ marginTop: "4px" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: currentUser.email_opt_in !== false ? T.green5 : T.cream, color: currentUser.email_opt_in !== false ? T.green1 : T.stoneL, border: `1px solid ${currentUser.email_opt_in !== false ? T.green3 : T.border}`, borderRadius: "100px", padding: "2px 9px", fontSize: "0.7rem", fontWeight: 600 }}>
+                      {currentUser.email_opt_in !== false ? "📬 Event emails on" : "🔕 Event emails off"}
+                    </span>
+                  </div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
@@ -4032,6 +4397,17 @@ function MyTicketsView() {
                   <Field label="State">
                     <input value={profileForm.state} onChange={e => setProfileForm(f => ({ ...f, state: e.target.value }))} placeholder="IA" style={inp()} />
                   </Field>
+                </div>
+                {/* Email opt-in toggle */}
+                <div onClick={() => setProfileForm(f => ({ ...f, emailOptIn: !f.emailOptIn }))}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: profileForm.emailOptIn ? `${T.green1}08` : T.cream, border: `1px solid ${profileForm.emailOptIn ? T.green3 : T.border}`, borderRadius: "10px", padding: "12px 14px", cursor: "pointer", userSelect: "none", marginBottom: "14px", transition: "all 0.15s" }}>
+                  <div>
+                    <div style={{ color: T.textMid, fontWeight: 600, fontSize: "0.85rem" }}>📬 Notify me about upcoming events</div>
+                    <div style={{ color: T.stoneL, fontSize: "0.75rem", marginTop: "1px" }}>Receive occasional emails about New Harmony Life events &amp; community news</div>
+                  </div>
+                  <div style={{ width: "44px", height: "24px", borderRadius: "12px", background: profileForm.emailOptIn ? T.green1 : "#D1D5DB", flexShrink: 0, marginLeft: "12px", position: "relative", transition: "background 0.2s" }}>
+                    <div style={{ position: "absolute", top: "3px", left: profileForm.emailOptIn ? "23px" : "3px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                  </div>
                 </div>
                 <button onClick={async () => { await updateProfile(profileForm); setEditingProfile(false); }}
                   style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "10px", padding: "10px 24px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.9rem" }}>
@@ -4378,7 +4754,7 @@ function DashLoginView() {
         <div style={{ width: "60px", height: "60px", borderRadius: "50%", background: T.green5, border: `2px solid ${T.green3}`, margin: "0 auto 1.5rem", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.8rem" }}>🔒</div>
         <h2 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.5rem", margin: "0 0 0.5rem" }}>Admin Dashboard</h2>
         <p style={{ color: T.textSoft, fontSize: "0.9rem", margin: "0 0 2rem" }}>Enter the admin password to manage events and vendor applications.</p>
-        <input type="password" value={pwInput} onChange={e => { setPwInput(e.target.value); setPwError(false); }} onKeyDown={e => e.key === "Enter" && unlock()} placeholder="Enter password"
+        <PasswordInput value={pwInput} onChange={e => { setPwInput(e.target.value); setPwError(false); }} onKeyDown={e => e.key === "Enter" && unlock()} placeholder="Enter password"
           style={{ width: "100%", padding: "12px 16px", background: T.cream, border: `1px solid ${pwError ? T.warn : T.border}`, borderRadius: "10px", color: T.text, fontSize: "1rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit", marginBottom: "8px", textAlign: "center" }} />
         {pwError && <div style={{ color: T.warn, fontSize: "0.8rem", marginBottom: "8px" }}>⚠ Incorrect password. Try again.</div>}
         <button onClick={unlock} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "10px", padding: "13px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Unlock Dashboard</button>
@@ -4389,9 +4765,239 @@ function DashLoginView() {
   );
 }
 
+// ─── DASHBOARD SETTINGS PANEL ────────────────────────────────────────────────
+function DashSettingsPanel() {
+  const { vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, showToast, resendApiKey, setResendApiKey } = useApp();
+
+  // ── Vibe editor state ───────────────────────────────────────────────────
+  const [vibeEnabled, setVibeEnabled] = useState(vibeConfig.enabled);
+  const [vibeItems, setVibeItems] = useState(vibeConfig.items.map(v => ({ ...v })));
+  const [vibeEditId, setVibeEditId] = useState(null);
+  const [newVibe, setNewVibe] = useState({ emoji: "✨", label: "" });
+  const [vibeAddOpen, setVibeAddOpen] = useState(false);
+
+  const saveVibes = () => { saveVibeConfig({ enabled: vibeEnabled, items: vibeItems }); showToast("Vibe settings saved ✓"); };
+  const updateVibeItem = (id, field, val) => setVibeItems(prev => prev.map(v => v.id === id ? { ...v, [field]: val } : v));
+  const removeVibeItem = (id) => setVibeItems(prev => prev.filter(v => v.id !== id));
+  const addVibeItem = () => {
+    if (!newVibe.label.trim()) return;
+    const id = newVibe.label.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") + "-" + Date.now();
+    setVibeItems(prev => [...prev, { id, emoji: newVibe.emoji, label: newVibe.label.trim() }]);
+    setNewVibe({ emoji: "✨", label: "" }); setVibeAddOpen(false);
+  };
+  const moveVibe = (idx, dir) => {
+    const arr = [...vibeItems]; const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= arr.length) return;
+    [arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]]; setVibeItems(arr);
+  };
+
+  // ── Sort / filter button editor state ───────────────────────────────────
+  const [sortEnabled, setSortEnabled] = useState(sortConfig.enabled);
+  const [sortItems, setSortItems] = useState(sortConfig.items.map(s => ({ ...s })));
+  const [newSort, setNewSort] = useState({ label: "", group: "date" });
+  const [sortAddOpen, setSortAddOpen] = useState(false);
+  const [sortEditId, setSortEditId] = useState(null);
+
+  const saveSorts = () => { saveSortConfig({ enabled: sortEnabled, items: sortItems }); showToast("Sort settings saved ✓"); };
+  const updateSortItem = (id, field, val) => setSortItems(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
+  const removeSortItem = (id) => setSortItems(prev => prev.filter(s => s.id !== id));
+  const addSortItem = () => {
+    if (!newSort.label.trim()) return;
+    const id = newSort.group + "-" + newSort.label.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") + "-" + Date.now();
+    setSortItems(prev => [...prev, { id, label: newSort.label.trim(), group: newSort.group }]);
+    setNewSort({ label: "", group: "date" }); setSortAddOpen(false);
+  };
+  const moveSort = (idx, dir) => {
+    const arr = [...sortItems]; const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= arr.length) return;
+    [arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]]; setSortItems(arr);
+  };
+
+  // ── Shared mini helpers ──────────────────────────────────────────────────
+  const panelStyle = { background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px", marginBottom: "20px" };
+  const TogglePill = ({ on, onToggle }) => (
+    <div onClick={onToggle} style={{ width: "48px", height: "26px", borderRadius: "13px", background: on ? T.green1 : "#D1D5DB", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+      <div style={{ position: "absolute", top: "4px", left: on ? "26px" : "4px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+    </div>
+  );
+  const StatusBadge = ({ on }) => (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: on ? T.green5 : T.cream, border: `1px solid ${on ? T.green3 : T.border}`, borderRadius: "100px", padding: "3px 12px", fontSize: "0.75rem", fontWeight: 600, color: on ? T.green1 : T.stoneL, marginBottom: "18px" }}>
+      {on ? "✅ Showing on Discover" : "🔕 Hidden from Discover"}
+    </div>
+  );
+  const rowStyle = { display: "flex", alignItems: "center", gap: "8px", padding: "9px 12px", background: T.cream, borderRadius: "10px", border: `1px solid ${T.border}`, marginBottom: "6px" };
+  const SmBtn = ({ label, onClick, danger }) => (
+    <button onClick={onClick} style={{ background: danger ? "#FEE2E2" : T.green5, color: danger ? T.warn : T.green1, border: `1px solid ${danger ? "#FECACA" : T.green3}`, borderRadius: "6px", padding: "4px 9px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.72rem", whiteSpace: "nowrap" }}>{label}</button>
+  );
+  const TinyInput = ({ value, onChange, placeholder, width }) => (
+    <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      style={{ padding: "5px 9px", borderRadius: "7px", border: `1px solid ${T.border}`, background: "#fff", fontFamily: "inherit", fontSize: "0.82rem", width: width || "100%", boxSizing: "border-box", outline: "none", minWidth: 0 }} />
+  );
+  const SaveBtn = ({ label, onClick }) => (
+    <button onClick={onClick} style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "10px", padding: "10px 24px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.9rem" }}>{label}</button>
+  );
+
+  return (
+    <div style={{ maxWidth: "600px" }}>
+
+      {/* ── Vibe Tags ─────────────────────────────────────────────────────── */}
+      <div style={panelStyle}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", marginBottom: "6px" }}>
+          <div>
+            <h3 style={{ color: T.text, margin: "0 0 4px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>🏷️ Vibe Tags</h3>
+            <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: 0, lineHeight: 1.5 }}>Filter badges shown on the Discover page in the vibe filter row.</p>
+          </div>
+          <TogglePill on={vibeEnabled} onToggle={() => setVibeEnabled(v => !v)} />
+        </div>
+        <StatusBadge on={vibeEnabled} />
+
+        <div style={{ marginBottom: "10px" }}>
+          {vibeItems.map((vt, idx) => (
+            <div key={vt.id} style={rowStyle}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1px", flexShrink: 0 }}>
+                <button onClick={() => moveVibe(idx, -1)} disabled={idx === 0} style={{ background: "none", border: "none", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? T.border : T.stoneL, fontSize: "0.6rem", padding: "1px 3px", lineHeight: 1 }}>▲</button>
+                <button onClick={() => moveVibe(idx, 1)} disabled={idx === vibeItems.length - 1} style={{ background: "none", border: "none", cursor: idx === vibeItems.length - 1 ? "default" : "pointer", color: idx === vibeItems.length - 1 ? T.border : T.stoneL, fontSize: "0.6rem", padding: "1px 3px", lineHeight: 1 }}>▼</button>
+              </div>
+              {vibeEditId === vt.id ? (
+                <>
+                  <TinyInput value={vt.emoji} onChange={val => updateVibeItem(vt.id, "emoji", val)} placeholder="🌿" width="52px" />
+                  <TinyInput value={vt.label} onChange={val => updateVibeItem(vt.id, "label", val)} placeholder="Label" />
+                  <SmBtn label="Done ✓" onClick={() => setVibeEditId(null)} />
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: "1.1rem", flexShrink: 0 }}>{vt.emoji}</span>
+                  <span style={{ flex: 1, color: T.textMid, fontSize: "0.85rem", fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vt.label}</span>
+                  <SmBtn label="✏️ Edit" onClick={() => setVibeEditId(vt.id)} />
+                  <SmBtn label="✕" onClick={() => removeVibeItem(vt.id)} danger />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {vibeAddOpen ? (
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", padding: "10px 12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+            <TinyInput value={newVibe.emoji} onChange={val => setNewVibe(v => ({ ...v, emoji: val }))} placeholder="🌿" width="52px" />
+            <div style={{ flex: 1, minWidth: "140px" }}>
+              <TinyInput value={newVibe.label} onChange={val => setNewVibe(v => ({ ...v, label: val }))} placeholder="Tag label (e.g. Campfire Friendly)" />
+            </div>
+            <SmBtn label="+ Add" onClick={addVibeItem} />
+            <SmBtn label="Cancel" onClick={() => { setVibeAddOpen(false); setNewVibe({ emoji: "✨", label: "" }); }} />
+          </div>
+        ) : (
+          <button onClick={() => setVibeAddOpen(true)} style={{ background: "none", border: `1px dashed ${T.green3}`, color: T.green1, borderRadius: "9px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.82rem", width: "100%", marginBottom: "12px" }}>
+            + Add Vibe Tag
+          </button>
+        )}
+
+        <SaveBtn label="Save Vibe Settings ✓" onClick={saveVibes} />
+      </div>
+
+      {/* ── Sort / Filter Buttons ──────────────────────────────────────────── */}
+      <div style={panelStyle}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", marginBottom: "6px" }}>
+          <div>
+            <h3 style={{ color: T.text, margin: "0 0 4px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>🔘 Discover Sort Buttons</h3>
+            <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: 0, lineHeight: 1.5 }}>Quick-filter buttons on Discover (e.g. Today, This Week, Free). Date group = date filter; Price group = free-events toggle.</p>
+          </div>
+          <TogglePill on={sortEnabled} onToggle={() => setSortEnabled(v => !v)} />
+        </div>
+        <StatusBadge on={sortEnabled} />
+
+        <div style={{ marginBottom: "10px" }}>
+          {sortItems.length === 0 && <div style={{ color: T.stoneL, fontSize: "0.82rem", padding: "12px", textAlign: "center", background: T.cream, borderRadius: "10px", border: `1px solid ${T.border}`, marginBottom: "6px" }}>No buttons yet — add one below</div>}
+          {sortItems.map((si, idx) => (
+            <div key={si.id} style={rowStyle}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1px", flexShrink: 0 }}>
+                <button onClick={() => moveSort(idx, -1)} disabled={idx === 0} style={{ background: "none", border: "none", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? T.border : T.stoneL, fontSize: "0.6rem", padding: "1px 3px", lineHeight: 1 }}>▲</button>
+                <button onClick={() => moveSort(idx, 1)} disabled={idx === sortItems.length - 1} style={{ background: "none", border: "none", cursor: idx === sortItems.length - 1 ? "default" : "pointer", color: idx === sortItems.length - 1 ? T.border : T.stoneL, fontSize: "0.6rem", padding: "1px 3px", lineHeight: 1 }}>▼</button>
+              </div>
+              {sortEditId === si.id ? (
+                <>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <TinyInput value={si.label} onChange={val => updateSortItem(si.id, "label", val)} placeholder="Button label" />
+                  </div>
+                  <select value={si.group} onChange={e => updateSortItem(si.id, "group", e.target.value)}
+                    style={{ padding: "5px 8px", borderRadius: "7px", border: `1px solid ${T.border}`, background: "#fff", fontFamily: "inherit", fontSize: "0.78rem", flexShrink: 0 }}>
+                    <option value="date">📅 Date filter</option>
+                    <option value="price">💰 Price filter</option>
+                  </select>
+                  <SmBtn label="Done ✓" onClick={() => setSortEditId(null)} />
+                </>
+              ) : (
+                <>
+                  <span style={{ flex: 1, color: T.textMid, fontSize: "0.85rem", fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{si.label}</span>
+                  <span style={{ background: si.group === "date" ? `${T.earth}18` : T.green5, color: si.group === "date" ? T.earth : T.green1, borderRadius: "100px", padding: "2px 9px", fontSize: "0.7rem", fontWeight: 600, flexShrink: 0 }}>{si.group === "date" ? "📅 date" : "💰 price"}</span>
+                  <SmBtn label="✏️ Edit" onClick={() => setSortEditId(si.id)} />
+                  <SmBtn label="✕" onClick={() => removeSortItem(si.id)} danger />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {sortAddOpen ? (
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", padding: "10px 12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: "140px" }}>
+              <TinyInput value={newSort.label} onChange={val => setNewSort(v => ({ ...v, label: val }))} placeholder="Button label (e.g. This Weekend)" />
+            </div>
+            <select value={newSort.group} onChange={e => setNewSort(v => ({ ...v, group: e.target.value }))}
+              style={{ padding: "5px 8px", borderRadius: "7px", border: `1px solid ${T.border}`, background: "#fff", fontFamily: "inherit", fontSize: "0.78rem", flexShrink: 0 }}>
+              <option value="date">📅 Date filter</option>
+              <option value="price">💰 Price filter</option>
+            </select>
+            <SmBtn label="+ Add" onClick={addSortItem} />
+            <SmBtn label="Cancel" onClick={() => { setSortAddOpen(false); setNewSort({ label: "", group: "date" }); }} />
+          </div>
+        ) : (
+          <button onClick={() => setSortAddOpen(true)} style={{ background: "none", border: `1px dashed ${T.green3}`, color: T.green1, borderRadius: "9px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.82rem", width: "100%", marginBottom: "12px" }}>
+            + Add Sort Button
+          </button>
+        )}
+
+        <SaveBtn label="Save Sort Settings ✓" onClick={saveSorts} />
+      </div>
+
+      {/* ── Email Confirmations ───────────────────────────────────────────── */}
+      <div style={panelStyle}>
+        <h3 style={{ color: T.text, margin: "0 0 6px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>📧 Email Confirmations (Resend)</h3>
+        <p style={{ color: T.textSoft, fontSize: "0.85rem", margin: "0 0 18px", lineHeight: 1.6 }}>
+          When set, customers will receive a confirmation email after purchasing tickets. Get a free API key at <a href="https://resend.com" target="_blank" rel="noopener noreferrer" style={{ color: T.green1 }}>resend.com</a>.
+        </p>
+        <Field label="Resend API Key">
+          <PasswordInput value={resendApiKey} onChange={e => setResendApiKey(e.target.value)} placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxxxx" style={inp()} />
+        </Field>
+        <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
+          <button onClick={() => { localStorage.setItem("nh_resend_key", resendApiKey); showToast("API key saved ✓"); }}
+            style={{ background: T.green1, color: "#fff", border: "none", borderRadius: "9px", padding: "10px 20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>Save Key</button>
+          {localStorage.getItem("nh_resend_key") && (
+            <button onClick={() => { localStorage.removeItem("nh_resend_key"); setResendApiKey(""); showToast("API key removed", "warn"); }}
+              style={{ background: "#FEE2E2", color: T.warn, border: "none", borderRadius: "9px", padding: "10px 20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Remove Key</button>
+          )}
+        </div>
+        {localStorage.getItem("nh_resend_key") && (
+          <div style={{ marginTop: "12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "10px 14px", fontSize: "0.82rem", color: T.green1, fontWeight: 600 }}>✅ Email confirmations are active</div>
+        )}
+        <div style={{ marginTop: "16px", background: "#FFF8E7", border: "1px solid #F6D860", borderRadius: "10px", padding: "14px 16px", fontSize: "0.82rem", color: "#92710A", lineHeight: 1.6 }}>
+          <strong>Setup steps:</strong><br/>1. Create account at resend.com<br/>2. Add &amp; verify your domain<br/>3. Create an API key and paste it above<br/>4. Update the "from" address in the code
+        </div>
+      </div>
+
+      {/* ── Admin Password ────────────────────────────────────────────────── */}
+      <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px" }}>
+        <h3 style={{ color: T.text, margin: "0 0 6px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>🔐 Admin Password</h3>
+        <p style={{ color: T.textSoft, fontSize: "0.85rem", margin: "0 0 4px", lineHeight: 1.6 }}>
+          Current password is hardcoded as <code style={{ background: T.cream, padding: "2px 6px", borderRadius: "4px" }}>harmony2026</code>. Change it in the source code before going to production.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView() {
-  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents } = useApp();
+  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig } = useApp();
   const [dashTab, setDashTab] = useState("events");
   const [archiveSearch, setArchiveSearch] = useState("");
   const [checkinSearch, setCheckinSearch] = useState("");
@@ -5010,52 +5616,7 @@ function DashboardView() {
           );
         })()}
 
-        {dashTab === "settings" && (
-          <div style={{ maxWidth: "560px" }}>
-            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px", marginBottom: "20px" }}>
-              <h3 style={{ color: T.text, margin: "0 0 6px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>📧 Email Confirmations (Resend)</h3>
-              <p style={{ color: T.textSoft, fontSize: "0.85rem", margin: "0 0 18px", lineHeight: 1.6 }}>
-                When set, customers will receive a confirmation email after purchasing tickets.
-                Get a free API key at <a href="https://resend.com" target="_blank" rel="noopener noreferrer" style={{ color: T.green1 }}>resend.com</a> and add your sending domain.
-              </p>
-              <Field label="Resend API Key">
-                <input
-                  type="password"
-                  value={resendApiKey}
-                  onChange={e => setResendApiKey(e.target.value)}
-                  placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxxxx"
-                  style={inp()}
-                />
-              </Field>
-              <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
-                <button onClick={() => { localStorage.setItem("nh_resend_key", resendApiKey); showToast("API key saved ✓"); }}
-                  style={{ background: T.green1, color: "#fff", border: "none", borderRadius: "9px", padding: "10px 20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>Save Key</button>
-                {localStorage.getItem("nh_resend_key") && (
-                  <button onClick={() => { localStorage.removeItem("nh_resend_key"); setResendApiKey(""); showToast("API key removed", "warn"); }}
-                    style={{ background: "#FEE2E2", color: T.warn, border: "none", borderRadius: "9px", padding: "10px 20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Remove Key</button>
-                )}
-              </div>
-              {localStorage.getItem("nh_resend_key") && (
-                <div style={{ marginTop: "12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "10px 14px", fontSize: "0.82rem", color: T.green1, fontWeight: 600 }}>
-                  ✅ Email confirmations are active
-                </div>
-              )}
-              <div style={{ marginTop: "16px", background: "#FFF8E7", border: "1px solid #F6D860", borderRadius: "10px", padding: "14px 16px", fontSize: "0.82rem", color: "#92710A", lineHeight: 1.6 }}>
-                <strong>Setup steps:</strong><br/>
-                1. Create account at resend.com<br/>
-                2. Add &amp; verify your domain (e.g. newharmonylife.com)<br/>
-                3. Create an API key and paste it above<br/>
-                4. Update the "from" address in the code to match your domain
-              </div>
-            </div>
-            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px" }}>
-              <h3 style={{ color: T.text, margin: "0 0 6px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>🔐 Admin Password</h3>
-              <p style={{ color: T.textSoft, fontSize: "0.85rem", margin: "0 0 4px", lineHeight: 1.6 }}>
-                Current password is hardcoded as <code style={{ background: T.cream, padding: "2px 6px", borderRadius: "4px" }}>harmony2026</code>. Change it in the source code before going to production.
-              </p>
-            </div>
-          </div>
-        )}
+        {dashTab === "settings" && <DashSettingsPanel />}
       </div>
     </div>
   );
