@@ -49,7 +49,13 @@ const supabase = (() => {
   const authReq = async (method, endpoint, body) => {
     // Use auth-specific headers — no Prefer header, clean JSON only
     const res = await fetch(endpoint, { method, headers: { ...authHeaders }, body: body ? JSON.stringify(body) : undefined });
-    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || err.error_description || `HTTP ${res.status}`); }
+    if (!res.ok) {
+      const rawText = await res.text().catch(() => "");
+      console.error("[NH authReq] HTTP", res.status, endpoint, rawText);
+      let err = {};
+      try { err = JSON.parse(rawText); } catch (e) {}
+      throw new Error(err.message || err.error_description || err.msg || rawText || `HTTP ${res.status}`);
+    }
     const text = await res.text();
     return text ? JSON.parse(text) : null;
   };
@@ -72,19 +78,35 @@ const supabase = (() => {
     getSession, setSession,
     auth: {
       signUp: async ({ email, password, options }) => {
-        try {
-          const raw = await authReq("POST", authUrl("/signup"), { email, password, data: options?.data });
-          console.log("[NH signup] raw response:", JSON.stringify(raw).slice(0, 300));
-          // Supabase REST /signup returns user + token at top level when email confirm is off,
-          // or { id, email, ... } with no access_token when email confirmation is required.
-          const user = raw?.user ?? (raw?.id ? { id: raw.id, email: raw.email, user_metadata: raw.user_metadata || {} } : null);
-          const session = raw?.access_token ? { access_token: raw.access_token, refresh_token: raw.refresh_token } : null;
-          if (session) setSession({ ...session, user });
-          return { data: { user, session }, error: null };
-        } catch (e) {
-          console.error("[NH signup] error:", e.message);
-          return { data: { user: null, session: null }, error: e };
+        // Supabase Auth v2 REST /signup payload.
+        // "phone" is a reserved top-level Auth field — passing it inside `data` causes 422.
+        // Rename phone -> phone_number inside metadata to avoid the conflict.
+        const meta = options?.data ? { ...options.data } : {};
+        if (meta.phone !== undefined) { meta.phone_number = meta.phone; delete meta.phone; }
+
+        // Try 3 payloads in order — most to least data — stopping on first success.
+        // Retries on 500 (server error) but not 422/400 (bad request — different payload won't fix).
+        const attempts = [
+          { email, password, data: meta },   // with renamed metadata
+          { email, password },                // bare minimum if metadata still causes issues
+        ];
+        let lastError = null;
+        for (const payload of attempts) {
+          try {
+            console.log("[NH signup] trying payload keys:", Object.keys(payload));
+            const raw = await authReq("POST", authUrl("/signup"), payload);
+            console.log("[NH signup] success:", JSON.stringify(raw).slice(0, 200));
+            const user = raw?.user ?? (raw?.id ? { id: raw.id, email: raw.email, user_metadata: meta } : null);
+            const session = raw?.access_token ? { access_token: raw.access_token, refresh_token: raw.refresh_token } : null;
+            if (session) setSession({ ...session, user });
+            return { data: { user, session }, error: null };
+          } catch (e) {
+            console.error("[NH signup] attempt failed:", e.message);
+            lastError = e;
+            if (!e.message.includes("500")) break; // 422/400 = bad request, retrying won't help
+          }
         }
+        return { data: { user: null, session: null }, error: lastError };
       },
       signInWithPassword: async ({ email, password }) => {
         try {
@@ -1040,7 +1062,14 @@ function AppProvider({ children }) {
     if (error) {
       const msg = error.message || "Signup failed. Please try again.";
       const isExisting = msg.toLowerCase().includes("already") || msg.toLowerCase().includes("registered");
-      setAuthErrors({ email: isExisting ? "An account with this email already exists. Try signing in instead." : msg });
+      const isWeak = msg.toLowerCase().includes("password") || msg.toLowerCase().includes("weak");
+      const isEmail = msg.toLowerCase().includes("email") || msg.toLowerCase().includes("invalid");
+      let friendly = msg;
+      if (isExisting) friendly = "An account with this email already exists. Try signing in instead.";
+      else if (isWeak) friendly = "Password is too weak. Please use at least 6 characters with a mix of letters and numbers.";
+      else if (isEmail) friendly = "Please enter a valid email address.";
+      console.error("[NH handleSignup] error:", msg);
+      setAuthErrors({ email: friendly });
       return;
     }
 
