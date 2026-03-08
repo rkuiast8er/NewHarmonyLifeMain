@@ -5511,6 +5511,65 @@ function DashLoginView() {
 }
 
 // ─── DASHBOARD SETTINGS PANEL ────────────────────────────────────────────────
+function TermsEditor({ panelStyle }) {
+  const { termsContent, saveTermsContent, showToast } = useApp();
+  const [localTerms, setLocalTerms] = useState(termsContent);
+  const [termsPreview, setTermsPreview] = useState(false);
+  const isDirty = localTerms !== termsContent;
+  return (
+    <div style={panelStyle}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px", flexWrap: "wrap", gap: "10px" }}>
+        <h3 style={{ color: T.text, margin: 0, fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>📄 Terms of Service & Privacy Policy</h3>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={() => setTermsPreview(p => !p)}
+            style={{ background: termsPreview ? T.green5 : T.cream, color: termsPreview ? T.green1 : T.textSoft, border: `1px solid ${termsPreview ? T.green3 : T.border}`, borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
+            {termsPreview ? "✏️ Edit" : "👁 Preview"}
+          </button>
+          {isDirty && (
+            <button onClick={() => { saveTermsContent(localTerms); showToast("Terms saved ✓"); }}
+              style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.78rem" }}>
+              Save Changes
+            </button>
+          )}
+          {isDirty && (
+            <button onClick={() => setLocalTerms(termsContent)}
+              style={{ background: "#FEE2E2", color: T.warn, border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
+              Discard
+            </button>
+          )}
+        </div>
+      </div>
+      <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: "0 0 14px", lineHeight: 1.6 }}>
+        This is displayed when users click "Terms of Service" during sign-up. Format sections with a number and period at the start of a line (e.g. <code style={{ background: T.cream, padding: "1px 5px", borderRadius: "4px" }}>1. Section Title</code>) — the rest of the text in that block becomes the body.
+      </p>
+      {termsPreview ? (
+        <div style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "18px 20px", maxHeight: "420px", overflowY: "auto" }}>
+          {localTerms.split("\n").map((line, i) => {
+            const isHeading = /^\d+\.\s+/.test(line);
+            return line.trim() ? (
+              <p key={i} style={{ margin: "0 0 8px", color: isHeading ? T.green1 : T.textSoft, fontWeight: isHeading ? 700 : 400, fontSize: isHeading ? "0.88rem" : "0.83rem", lineHeight: 1.7 }}>{line}</p>
+            ) : <div key={i} style={{ height: "6px" }} />;
+          })}
+        </div>
+      ) : (
+        <textarea
+          value={localTerms}
+          onChange={e => setLocalTerms(e.target.value)}
+          rows={22}
+          style={{ width: "100%", padding: "14px", borderRadius: "10px", border: `1px solid ${isDirty ? T.green3 : T.border}`, fontFamily: "inherit", fontSize: "0.83rem", lineHeight: 1.7, color: T.textMid, background: "#fff", resize: "vertical", outline: "none", boxSizing: "border-box" }}
+          placeholder="Enter your terms of service here..."
+          spellCheck={true}
+        />
+      )}
+      {isDirty && (
+        <div style={{ marginTop: "10px", background: "#FFF8E7", border: "1px solid #F6D860", borderRadius: "8px", padding: "8px 12px", fontSize: "0.78rem", color: "#92710A", fontWeight: 600 }}>
+          ⚠ Unsaved changes — click Save Changes to publish.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DashSettingsPanel() {
   const { vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig, showToast, resendApiKey, setResendApiKey, termsContent, saveTermsContent } = useApp();
 
@@ -5874,63 +5933,7 @@ function DashSettingsPanel() {
       </div>
 
       {/* ── Terms of Service Editor ──────────────────────────────────────── */}
-      {(() => {
-        const [localTerms, setLocalTerms] = React.useState(termsContent);
-        const [termsPreview, setTermsPreview] = React.useState(false);
-        const isDirty = localTerms !== termsContent;
-        return (
-          <div style={panelStyle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px", flexWrap: "wrap", gap: "10px" }}>
-              <h3 style={{ color: T.text, margin: 0, fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>📄 Terms of Service & Privacy Policy</h3>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => setTermsPreview(p => !p)}
-                  style={{ background: termsPreview ? T.green5 : T.cream, color: termsPreview ? T.green1 : T.textSoft, border: `1px solid ${termsPreview ? T.green3 : T.border}`, borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
-                  {termsPreview ? "✏️ Edit" : "👁 Preview"}
-                </button>
-                {isDirty && (
-                  <button onClick={() => { saveTermsContent(localTerms); showToast("Terms saved ✓"); }}
-                    style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.78rem" }}>
-                    Save Changes
-                  </button>
-                )}
-                {isDirty && (
-                  <button onClick={() => setLocalTerms(termsContent)}
-                    style={{ background: "#FEE2E2", color: T.warn, border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
-                    Discard
-                  </button>
-                )}
-              </div>
-            </div>
-            <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: "0 0 14px", lineHeight: 1.6 }}>
-              This is displayed when users click "Terms of Service" during sign-up. Format sections with a number and period at the start of a line (e.g. <code style={{ background: T.cream, padding: "1px 5px", borderRadius: "4px" }}>1. Section Title</code>) — the rest of the text in that block becomes the body.
-            </p>
-            {termsPreview ? (
-              <div style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "18px 20px", maxHeight: "420px", overflowY: "auto" }}>
-                {localTerms.split("\n").map((line, i) => {
-                  const isHeading = /^\d+\.\s+/.test(line);
-                  return line.trim() ? (
-                    <p key={i} style={{ margin: "0 0 8px", color: isHeading ? T.green1 : T.textSoft, fontWeight: isHeading ? 700 : 400, fontSize: isHeading ? "0.88rem" : "0.83rem", lineHeight: 1.7 }}>{line}</p>
-                  ) : <div key={i} style={{ height: "6px" }} />;
-                })}
-              </div>
-            ) : (
-              <textarea
-                value={localTerms}
-                onChange={e => setLocalTerms(e.target.value)}
-                rows={22}
-                style={{ width: "100%", padding: "14px", borderRadius: "10px", border: `1px solid ${isDirty ? T.green3 : T.border}`, fontFamily: "inherit", fontSize: "0.83rem", lineHeight: 1.7, color: T.textMid, background: "#fff", resize: "vertical", outline: "none", boxSizing: "border-box" }}
-                placeholder="Enter your terms of service here..."
-                spellCheck={true}
-              />
-            )}
-            {isDirty && (
-              <div style={{ marginTop: "10px", background: "#FFF8E7", border: "1px solid #F6D860", borderRadius: "8px", padding: "8px 12px", fontSize: "0.78rem", color: "#92710A", fontWeight: 600 }}>
-                ⚠ Unsaved changes — click Save Changes to publish.
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      <TermsEditor panelStyle={panelStyle} />
 
       {/* ── Admin Password ────────────────────────────────────────────────── */}
       <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px" }}>
