@@ -1849,8 +1849,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       }
       if (newId && tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: newId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: totalCap, sold: 0, sort_order: i })));
       // If private, store the generated token back in form state so the copy-link UI shows immediately
-      if (form.isPrivate && evPayload.invite_token) {
-        setForm(f => ({ ...f, inviteToken: evPayload.invite_token }));
+      if (form.isPrivate && fullPayload.invite_token) {
+        setForm(f => ({ ...f, inviteToken: fullPayload.invite_token }));
       }
       showToast("Event published ✓");
     }
