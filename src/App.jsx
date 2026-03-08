@@ -309,6 +309,7 @@ const EMPTY_EVENT_FORM = {
   eventTypes: [],     // array of eventTypeConfig ids
   refundPolicy: "none", // "none" | "partial" | "full"
   refundDeadlineDays: 7, // days before event for partial/full refunds
+  showAttendanceBar: true, // show/hide the registered count & capacity bar on event cards
 };
 
 const PAYPAL_CLIENT_ID = "REPLACE_WITH_YOUR_PAYPAL_CLIENT_ID";
@@ -817,6 +818,7 @@ function AppProvider({ children }) {
       eventTypes: ev.event_types || localExtMap[ev.id]?.event_types || [],
       refundPolicy: ev.refund_policy || localExtMap[ev.id]?.refund_policy || "none",
       refundDeadlineDays: ev.refund_deadline_days ?? localExtMap[ev.id]?.refund_deadline_days ?? 7,
+      showAttendanceBar: ev.show_attendance_bar ?? localExtMap[ev.id]?.show_attendance_bar ?? true,
       ticketTiers: (tiers || []).filter(t => t.event_id === ev.id).map(t => ({
         id: t.id, name: t.name, description: t.description,
         price: parseFloat(t.price), capacity: t.capacity, sold: t.sold,
@@ -1772,6 +1774,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       event_types: form.eventTypes || [],
       refund_policy: form.refundPolicy || "none",
       refund_deadline_days: parseInt(form.refundDeadlineDays) || 7,
+      show_attendance_bar: form.showAttendanceBar !== false,
     };
 
     // Try full payload; if any column is missing fall back to core only
@@ -3265,12 +3268,17 @@ function EventCard({ ev }) {
               })}
             </div>
           )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: "6px" }}>
-            <div style={{ color: full ? T.warn : almostFull ? "#D97706" : T.stoneL, fontSize: "0.7rem", fontWeight: 600 }}>{full ? "Sold out" : `${spots} spot${spots !== 1 ? "s" : ""} left`}</div>
-          </div>
-          <div style={{ height: "4px", background: T.border, borderRadius: "2px", overflow: "hidden", marginBottom: "2px" }}>
-            <div style={{ height: "100%", width: `${pctFull}%`, background: pctFull >= 90 ? T.warn : pctFull >= 70 ? "#D97706" : T.green2, borderRadius: "2px", transition: "width 0.3s" }} />
-          </div>
+          {ev.showAttendanceBar !== false && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                <div style={{ color: T.stoneL, fontSize: "0.7rem" }}>{sold} registered</div>
+                <div style={{ color: full ? T.warn : almostFull ? "#D97706" : T.stoneL, fontSize: "0.7rem", fontWeight: 600 }}>{full ? "Sold out" : `${spots} spot${spots !== 1 ? "s" : ""} left`}</div>
+              </div>
+              <div style={{ height: "4px", background: T.border, borderRadius: "2px", overflow: "hidden", marginBottom: "2px" }}>
+                <div style={{ height: "100%", width: `${pctFull}%`, background: pctFull >= 90 ? T.warn : pctFull >= 70 ? "#D97706" : T.green2, borderRadius: "2px", transition: "width 0.3s" }} />
+              </div>
+            </>
+          )}
         </div>
       </div>
       {/* Details button */}
@@ -3289,7 +3297,7 @@ function EventCard({ ev }) {
 function Navbar() {
   const { view, setView, cart, setCartOpen, currentUser, handleLogout, openAuth } = useApp();
   const cartCount = cart.reduce((s, item) => s + item.qty, 0);
-  const navLinks = [["discover", "Discover"], ["vendors", "Vendors"], ["mytickets", "My Tickets"]];
+  const navLinks = [["discover", "Discover"], ["vendors", "Vendors"], ["mytickets", "My Account"]];
   return (
     <nav style={{ background: T.bgDeep, padding: "0 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: "68px", position: "sticky", top: 0, zIndex: 200, boxShadow: "0 2px 12px rgba(0,0,0,0.18)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", minWidth: 0 }}>
@@ -3319,7 +3327,7 @@ function Navbar() {
         </button>
         {currentUser ? (
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <button onClick={() => setView("mytickets")} title="My Tickets" style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "10px", padding: "6px 12px", cursor: "pointer", color: "#fff", fontFamily: "inherit", fontSize: "0.82rem" }}>
+            <button onClick={() => setView("mytickets")} title="My Account" style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "10px", padding: "6px 12px", cursor: "pointer", color: "#fff", fontFamily: "inherit", fontSize: "0.82rem" }}>
               <div style={{ width: "26px", height: "26px", borderRadius: "50%", background: (currentUser.avatarColor || currentUser.avatar_color || "#40916C"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 700, color: "#fff", flexShrink: 0 }}>{initials(currentUser)}</div>
               <span style={{ maxWidth: "80px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.firstName || currentUser.first_name || ""}</span>
             </button>
@@ -3814,7 +3822,7 @@ function DetailView() {
               🔁 {getRecurringDescription(ev)}
             </div>
           )}
-          {/* Social action bar &mdash; interest, follow, share, calendar */}
+          {/* Social action bar — interest, follow, share, calendar */}
           {(() => {
             const intr = getInterest(ev.id);
             const isGoing = currentUser && intr.going.includes(currentUser.id);
@@ -3822,18 +3830,22 @@ function DetailView() {
             const isFollowing = following.has(ev.organizer);
             return (
               <div style={{ display: "flex", gap: "8px", marginBottom: "1.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                <button onClick={() => toggleInterest(ev.id, "going")}
-                  style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${isGoing ? T.green1 : T.border}`, background: isGoing ? T.green5 : "transparent", color: isGoing ? T.green1 : T.textSoft, fontFamily: "inherit", fontWeight: isGoing ? 700 : 400, fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
-                  ✅ Going {intr.going.length > 0 ? <span style={{ background: T.green1, color: "#fff", borderRadius: "100px", padding: "0px 6px", fontSize: "0.7rem" }}>{intr.going.length}</span> : ""}
-                </button>
-                <button onClick={() => toggleInterest(ev.id, "interested")}
-                  style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${isInterested ? T.gold : T.border}`, background: isInterested ? "#FFF8E7" : "transparent", color: isInterested ? "#92400E" : T.textSoft, fontFamily: "inherit", fontWeight: isInterested ? 700 : 400, fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
-                  ⭐ Interested {intr.interested.length > 0 ? <span style={{ background: T.gold, color: "#fff", borderRadius: "100px", padding: "0px 6px", fontSize: "0.7rem" }}>{intr.interested.length}</span> : ""}
-                </button>
-                <button onClick={() => toggleFollow(ev.organizer)}
-                  style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${isFollowing ? T.earth : T.border}`, background: isFollowing ? `${T.earth}15` : "transparent", color: isFollowing ? T.earth : T.textSoft, fontFamily: "inherit", fontWeight: isFollowing ? 700 : 400, fontSize: "0.82rem", cursor: "pointer" }}>
-                  {isFollowing ? "🔔 Following" : "🔔 Follow"} {ev.organizer}
-                </button>
+                {currentUser && (
+                  <>
+                    <button onClick={() => toggleInterest(ev.id, "going")}
+                      style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${isGoing ? T.green1 : T.border}`, background: isGoing ? T.green5 : "transparent", color: isGoing ? T.green1 : T.textSoft, fontFamily: "inherit", fontWeight: isGoing ? 700 : 400, fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
+                      ✅ Going {intr.going.length > 0 ? <span style={{ background: T.green1, color: "#fff", borderRadius: "100px", padding: "0px 6px", fontSize: "0.7rem" }}>{intr.going.length}</span> : ""}
+                    </button>
+                    <button onClick={() => toggleInterest(ev.id, "interested")}
+                      style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${isInterested ? T.gold : T.border}`, background: isInterested ? "#FFF8E7" : "transparent", color: isInterested ? "#92400E" : T.textSoft, fontFamily: "inherit", fontWeight: isInterested ? 700 : 400, fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
+                      ⭐ Interested {intr.interested.length > 0 ? <span style={{ background: T.gold, color: "#fff", borderRadius: "100px", padding: "0px 6px", fontSize: "0.7rem" }}>{intr.interested.length}</span> : ""}
+                    </button>
+                    <button onClick={() => toggleFollow(ev.organizer)}
+                      style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${isFollowing ? T.earth : T.border}`, background: isFollowing ? `${T.earth}15` : "transparent", color: isFollowing ? T.earth : T.textSoft, fontFamily: "inherit", fontWeight: isFollowing ? 700 : 400, fontSize: "0.82rem", cursor: "pointer" }}>
+                      {isFollowing ? "🔔 Following" : "🔔 Follow"} {ev.organizer}
+                    </button>
+                  </>
+                )}
                 <AddToCalendar ev={ev} />
                 <button onClick={() => copyReferralLink(ev.id)}
                   style={{ padding: "8px 14px", borderRadius: "8px", border: `1px solid ${T.border}`, background: "transparent", color: T.textSoft, fontFamily: "inherit", fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
@@ -3939,7 +3951,7 @@ function DetailView() {
           )}
 
           {/* Overall capacity bar */}
-          {(() => {
+          {ev.showAttendanceBar !== false && (() => {
             const sp = spotsLeft(ev);
             const cap = totalCapacity(ev);
             const sold = totalSold(ev);
@@ -3967,7 +3979,7 @@ function DetailView() {
               <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
                 <div style={{ fontSize: "1.5rem" }}>✅</div>
                 <div style={{ color: T.green1, fontWeight: 700, marginTop: "6px" }}>You're registered!</div>
-                <div style={{ color: T.textSoft, fontSize: "0.8rem", marginTop: "4px" }}>See My Tickets for details & QR code</div>
+                <div style={{ color: T.textSoft, fontSize: "0.8rem", marginTop: "4px" }}>See My Account for details & QR code</div>
               </div>
             </div>
           ) : full ? (
@@ -4276,7 +4288,7 @@ function CheckoutView() {
                   ))}
                 </div>
                 <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
-                  <button onClick={() => setView("mytickets")} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "10px", padding: "12px 22px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>View My Tickets</button>
+                  <button onClick={() => setView("mytickets")} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "10px", padding: "12px 22px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>View My Account</button>
                   <button onClick={() => setView("discover")} style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "10px", padding: "12px 22px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>Browse More Events</button>
                 </div>
               </div>
@@ -4669,6 +4681,15 @@ function CreateView() {
                   <div style={{ position: "absolute", top: "4px", left: form.isPrivate ? "28px" : "4px", width: "20px", height: "20px", borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
                 </div>
               </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", flexWrap: "wrap", gap: "10px" }}>
+                <div>
+                  <div style={{ color: T.textMid, fontWeight: 700, fontSize: "0.9rem", marginBottom: "2px" }}>📊 Show Attendance Bar</div>
+                  <div style={{ color: T.textSoft, fontSize: "0.8rem" }}>Display registered count &amp; remaining seats on event cards</div>
+                </div>
+                <div onClick={() => setForm({ ...form, showAttendanceBar: form.showAttendanceBar === false ? true : false })} style={{ width: "52px", height: "28px", borderRadius: "14px", background: form.showAttendanceBar !== false ? T.green1 : "#D1D5DB", cursor: "pointer", position: "relative", flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: "4px", left: form.showAttendanceBar !== false ? "28px" : "4px", width: "20px", height: "20px", borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
+                </div>
+              </div>
               {form.isPrivate && (
                 <div style={{ paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "12px" }}>
                   <Field label="Event Password (optional)" error={formErrors.privatePassword}>
@@ -4862,7 +4883,7 @@ function MyTicketsView() {
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: "4px", marginBottom: "1.5rem", background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "5px", overflowX: "auto" }} className="hide-scrollbar">
-          {[["tickets", "🎟️ My Tickets", activeTickets.length], ["badges", "🏅 Badges", earnedBadges.length], ["activity", "🌊 Activity", null], ["saved", "❤️ Saved", savedEvents.length], ["following", "🔔 Following", followedOrganizers.length]].map(([id, label, count]) => (
+          {[["tickets", "🎟️ My Account", activeTickets.length], ["badges", "🏅 Badges", earnedBadges.length], ["activity", "🌊 Activity", null], ["saved", "❤️ Saved", savedEvents.length], ["following", "🔔 Following", followedOrganizers.length]].map(([id, label, count]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{ flex: "0 0 auto", padding: "9px 12px", borderRadius: "9px", border: "none", background: activeTab === id ? `linear-gradient(135deg,${T.green1},${T.green2})` : "transparent", color: activeTab === id ? "#fff" : T.textSoft, fontFamily: "inherit", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", whiteSpace: "nowrap" }}>
               {label}{count != null && count > 0 && <span style={{ background: activeTab === id ? "rgba(255,255,255,0.25)" : T.green5, color: activeTab === id ? "#fff" : T.green1, borderRadius: "100px", padding: "1px 7px", fontSize: "0.72rem" }}>{count}</span>}
             </button>
@@ -4989,7 +5010,7 @@ function MyTicketsView() {
                 </div>
 
                 <button onClick={() => setScanModal(null)} style={{ marginTop: "1.25rem", background: "none", border: "none", color: T.stoneL, cursor: "pointer", fontSize: "0.82rem", fontFamily: "inherit" }}>
-                  ← Back to My Tickets
+                  ← Back to My Account
                 </button>
               </div>
             </div>
@@ -6820,7 +6841,7 @@ function Footer() {
         {/* Nav links */}
         <div>
           <div style={{ color: T.green4, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "10px" }}>Explore</div>
-          {[["discover", "Browse Events"], ["mytickets", "My Tickets"]].map(([v, l]) => (
+          {[["discover", "Browse Events"], ["mytickets", "My Account"]].map(([v, l]) => (
             <div key={v} style={{ marginBottom: "6px" }}>
               <button onClick={() => setView(v)} style={{ background: "none", border: "none", color: T.stoneL, cursor: "pointer", fontSize: "0.82rem", fontFamily: "inherit", padding: 0, textAlign: "left" }}
                 onMouseEnter={e => e.target.style.color = T.green4} onMouseLeave={e => e.target.style.color = T.stoneL}>{l}</button>
@@ -6903,7 +6924,7 @@ function AppShell() {
               {view === "discover" && "Welcome back &mdash; what's happening near you?"}
               {view === "detail" && "Viewing event details"}
               {view === "create" && "Creating a new event"}
-              {view === "mytickets" && "Your registered events"}
+              {view === "mytickets" && "Your account & registered events"}
               {view === "checkout" && "Completing your order"}
               {view === "dashboard" && "You're in admin mode"}
             </span>
