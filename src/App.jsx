@@ -376,6 +376,14 @@ const genTicketId = () => "TKT-" + Math.random().toString(36).substr(2,10).toUpp
 const catEmoji = (c) => ({ "Music": "🎵", "Community": "🌿", "Workshop": "🛠️", "Food & Drink": "🍽️", "Sports & Nature": "⛰️", "Arts & Crafts": "🎨", "Festival": "🎪", "Charity": "💚", "Wellness": "🧘", "Other": "🗓️" }[c] || "🗓️");
 const fileToDataUrl = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
 
+// ── Local photo store — persists event photos in localStorage keyed by event id ──
+// Bypasses Supabase column-type issues entirely for photo storage
+const LS_PHOTOS_KEY = "nh_event_photos_v1";
+const localPhotosLoad = () => { try { return JSON.parse(localStorage.getItem(LS_PHOTOS_KEY) || "{}"); } catch { return {}; } };
+const localPhotosSave = (map) => { try { localStorage.setItem(LS_PHOTOS_KEY, JSON.stringify(map)); } catch {} };
+const localPhotosGet = (eventId) => { const m = localPhotosLoad(); return m[eventId] || []; };
+const localPhotosSet = (eventId, photos) => { const m = localPhotosLoad(); m[eventId] = photos; localPhotosSave(m); };
+
 // Compress + resize an image file to a max width/height, returning a JPEG data URL
 // This keeps photos small enough to store in Supabase (typically under 150KB)
 const compressImage = (file, maxPx = 1200, quality = 0.75) => new Promise((res, rej) => {
@@ -716,6 +724,8 @@ function AppProvider({ children }) {
     if (!evData) return;
     // Diagnostic: log first event's photos field to confirm Supabase is returning it
     if (evData.length > 0) console.log("[NH] First event photos field:", evData[0].photos, "| type:", typeof evData[0].photos);
+    // Load locally-stored photos map (fallback for when Supabase can't store them)
+    const localPhotosMap = localPhotosLoad();
     const { data: tiers } = await supabase.from("ticket_tiers").select("*").order("sort_order", { ascending: true });
     const { data: vendors } = await supabase.from("vendors").select("*");
     const { data: waitlist } = await supabase.from("waitlist").select("*");
@@ -728,7 +738,7 @@ function AppProvider({ children }) {
       description: ev.description, capacity: ev.capacity,
       registered: ev.registered, color: ev.color,
       organizer: ev.organizer, tags: ev.tags || [],
-      online: ev.online, photos: ev.photos || [],
+      online: ev.online, photos: (ev.photos && ev.photos.length > 0) ? ev.photos : (localPhotosMap[ev.id] || []),
       vendorInvite: ev.vendor_invite, showVendors: ev.show_vendors,
       vendorDeadline: ev.vendor_deadline, vendorInfo: ev.vendor_info,
       profitModel: ev.profit_model, hostPct: ev.host_pct,
@@ -1660,6 +1670,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       const { error: updateErr } = await supabase.from("events").update(evPayload).eq("id", editingId);
       if (updateErr) { console.error("Event update error:", updateErr); showToast("Save error: " + updateErr.message, "warn"); return; }
       console.log("[NH] Saved photos count:", (evPayload.photos || []).length, "| first 80 chars:", (evPayload.photos?.[0] || "").slice(0, 80));
+      // Always persist photos locally so they survive Supabase column type issues
+      localPhotosSet(editingId, form.photos || []);
       // Delete old tiers and re-insert
       await supabase.from("ticket_tiers").delete().eq("event_id", editingId);
       if (tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: editingId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: totalCap, sold: t.sold || 0, sort_order: i })));
@@ -1783,6 +1795,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       const { data: newEv, error: insertErr } = await supabase.from("events").insert({ ...evPayload, registered: 0 }).select();
       if (insertErr) { console.error("Event insert error:", insertErr); showToast("Save error: " + insertErr.message, "warn"); return; }
       const newId = newEv?.[0]?.id;
+      // Persist photos locally keyed by the new event id
+      if (newId && (form.photos || []).length > 0) localPhotosSet(newId, form.photos);
       if (newId && tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: newId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: totalCap, sold: 0, sort_order: i })));
       // If private, store the generated token back in form state so the copy-link UI shows immediately
       if (form.isPrivate && evPayload.invite_token) {
