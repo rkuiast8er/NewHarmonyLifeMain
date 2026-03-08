@@ -1628,7 +1628,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         await supabase.from("events").update({ registered: (freshEvent?.registered ?? item.event.registered ?? 0) + item.qty }).eq("id", item.event.id);
       }
 
-      // Build local ticket objects for display
+      // Build local ticket objects for display — ticketInserts is already 1 row per ticket
       const newTickets = ticketInserts.map(t => ({
         ticketId: t.ticket_id,
         orderId: t.order_id,
@@ -1638,7 +1638,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         tierName: t.tier_name,
         buyerName: t.buyer_name,
         buyerEmail: t.buyer_email,
-        qty: t.quantity,
+        qty: 1,
         total: t.total,
         orderNum,
         bookedOn: new Date().toLocaleDateString(),
@@ -3932,6 +3932,18 @@ function DetailView() {
               </div>
             ))}
           </div>
+          {/* ── REGISTERED BANNER — shown above About when user is registered ── */}
+          {registered && (
+            <div style={{ marginBottom: "1.5rem" }}>
+              <CountdownTimer ev={ev} />
+              <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
+                <div style={{ fontSize: "1.5rem" }}>✅</div>
+                <div style={{ color: T.green1, fontWeight: 700, marginTop: "6px" }}>You're registered!</div>
+                <div style={{ color: T.textSoft, fontSize: "0.8rem", marginTop: "4px" }}>See My Account for details & QR code</div>
+              </div>
+            </div>
+          )}
+
           <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "14px", padding: "20px", marginBottom: "2rem" }}>
             <h3 style={{ color: T.text, margin: "0 0 10px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>About This Event</h3>
             <p style={{ color: T.textSoft, lineHeight: 1.75, margin: 0 }}>{ev.description}</p>
@@ -4143,16 +4155,7 @@ function DetailView() {
           })()}
 
           {/* Quantity + CTA — only shown for single-tier events */}
-          {registered ? (
-            <div>
-              <CountdownTimer ev={ev} />
-              <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "16px", textAlign: "center" }}>
-                <div style={{ fontSize: "1.5rem" }}>✅</div>
-                <div style={{ color: T.green1, fontWeight: 700, marginTop: "6px" }}>You're registered!</div>
-                <div style={{ color: T.textSoft, fontSize: "0.8rem", marginTop: "4px" }}>See My Account for details & QR code</div>
-              </div>
-            </div>
-          ) : full ? (
+          {registered ? null : full ? (
             <div>
               <button disabled style={{ width: "100%", background: "#E5E7EB", color: T.stoneL, border: "none", borderRadius: "12px", padding: "13px", fontSize: "1rem", cursor: "not-allowed", fontFamily: "inherit", marginBottom: "10px" }}>Sold Out</button>
               {onWaitlist ? (
@@ -4231,17 +4234,19 @@ function PaymentStep() {
         setProcessing(true);
         setTimeout(() => {
           const orderNum = "NHL-PP-" + Math.random().toString(36).substr(2, 8).toUpperCase();
-          const newTickets = cart.map(item => ({
-            ticketId: genTicketId(),
-            eventId: item.event.id, eventTitle: item.event.title,
-            tierId: item.tier.id, tierName: item.tier.name,
-            qty: item.qty, bookedOn: new Date().toLocaleDateString(),
-            total: item.tier.price * item.qty, orderNum,
-            paymentMethod: "PayPal",
-            buyerName: `${checkoutInfo.firstName} ${checkoutInfo.lastName}`,
-            buyerEmail: checkoutInfo.email,
-            status: "confirmed", checkedIn: false, checkinTime: null,
-          }));
+          const newTickets = cart.flatMap(item =>
+            Array.from({ length: item.qty }, () => ({
+              ticketId: genTicketId(),
+              eventId: item.event.id, eventTitle: item.event.title,
+              tierId: item.tier.id, tierName: item.tier.name,
+              qty: 1, bookedOn: new Date().toLocaleDateString(),
+              total: item.tier.price, orderNum,
+              paymentMethod: "PayPal",
+              buyerName: `${checkoutInfo.firstName} ${checkoutInfo.lastName}`,
+              buyerEmail: checkoutInfo.email,
+              status: "confirmed", checkedIn: false, checkinTime: null,
+            }))
+          );
           setMyTickets(prev => [...prev, ...newTickets]);
           setEvents(prev => prev.map(ev => {
             const ci = cart.find(i => i.event.id === ev.id);
@@ -4283,7 +4288,19 @@ function PaymentStep() {
     setProcessing(true);
     setTimeout(() => {
       const orderNum = "NHL-STR-" + Math.random().toString(36).substr(2, 8).toUpperCase();
-      const newTickets = cart.map(item => ({ ticketId: genTicketId(), eventId: item.event.id, eventTitle: item.event.title, tierId: item.tier.id, tierName: item.tier.name, qty: item.qty, bookedOn: new Date().toLocaleDateString(), total: item.tier.price * item.qty, orderNum, paymentMethod: "Stripe", buyerName: `${checkoutInfo.firstName} ${checkoutInfo.lastName}`, buyerEmail: checkoutInfo.email, status: "confirmed", checkedIn: false, checkinTime: null }));
+      const newTickets = cart.flatMap(item =>
+        Array.from({ length: item.qty }, () => ({
+          ticketId: genTicketId(),
+          eventId: item.event.id, eventTitle: item.event.title,
+          tierId: item.tier.id, tierName: item.tier.name,
+          qty: 1, bookedOn: new Date().toLocaleDateString(),
+          total: item.tier.price, orderNum,
+          paymentMethod: "Stripe",
+          buyerName: `${checkoutInfo.firstName} ${checkoutInfo.lastName}`,
+          buyerEmail: checkoutInfo.email,
+          status: "confirmed", checkedIn: false, checkinTime: null,
+        }))
+      );
       setMyTickets(prev => [...prev, ...newTickets]);
       setEvents(prev => prev.map(ev => {
         const ci = cart.find(i => i.event.id === ev.id);
