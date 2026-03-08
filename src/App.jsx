@@ -6052,7 +6052,7 @@ function DashSettingsPanel() {
 
 // ─── ADMIN DETAIL VIEW ────────────────────────────────────────────────────────
 function AdminDetailView() {
-  const { selectedEvent, setView, setSelectedId, startEdit, handleDelete, duplicateEvent, scheduleEventReminders, copyInviteLink, showToast, getInterest, reviews, dashUnlocked, checkinAttendee, undoCheckin, updateVendorStatus } = useApp();
+  const { selectedEvent, setView, setSelectedId, startEdit, handleDelete, duplicateEvent, scheduleEventReminders, copyInviteLink, showToast, getInterest, reviews, dashUnlocked, checkinAttendee, undoCheckin, updateVendorStatus, qaItems, loadQA, answerQuestion, deleteQuestion } = useApp();
   const ev = selectedEvent;
 
   // Local ticket roster state — loaded from Supabase for this event
@@ -6072,6 +6072,12 @@ function AdminDetailView() {
   const [expenseFormError, setExpenseFormError] = React.useState("");
   const [editingExpenseId, setEditingExpenseId] = React.useState(null);
   const [expenseCatFilter, setExpenseCatFilter] = React.useState("All");
+
+  // Q&A admin state
+  const [qaLoaded, setQaLoaded] = React.useState(false);
+  const [adminAnswerFor, setAdminAnswerFor] = React.useState(null);
+  const [adminAnswerText, setAdminAnswerText] = React.useState("");
+  const [qaFilter, setQaFilter] = React.useState("all"); // "all" | "unanswered" | "answered"
 
   // Load tickets + expenses on mount
   React.useEffect(() => {
@@ -6099,6 +6105,8 @@ function AdminDetailView() {
     } catch(e) {}
     // Load expenses
     setExpenses(loadExpenses());
+    // Load Q&A
+    if (!qaLoaded) { loadQA(ev.id).catch(() => {}); setQaLoaded(true); }
   }, [ev?.id]);
 
   const saveExpenses = (list) => {
@@ -6758,6 +6766,137 @@ function AdminDetailView() {
           );
         })()}
 
+        {/* ── Q&A ADMIN PANEL ── */}
+        {(() => {
+          const evQA = qaItems[ev.id] || [];
+          const unanswered = evQA.filter(q => !q.answer);
+          const answered = evQA.filter(q => q.answer);
+          const filtered = qaFilter === "unanswered" ? unanswered : qaFilter === "answered" ? answered : evQA;
+
+          const handleAdminAnswer = async (qaId) => {
+            if (!adminAnswerText.trim()) return;
+            await answerQuestion(qaId, ev.id, adminAnswerText.trim()).catch(() => {});
+            setAdminAnswerFor(null);
+            setAdminAnswerText("");
+          };
+
+          const handleDeleteQ = async (qaId) => {
+            if (!window.confirm("Remove this question?")) return;
+            await deleteQuestion(qaId, ev.id).catch(() => {});
+          };
+
+          return (
+            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginTop: "20px" }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px", flexWrap: "wrap", gap: "10px" }}>
+                <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.05rem", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                  ❓ Q&amp;A Inbox
+                  {unanswered.length > 0 && (
+                    <span style={{ background: T.warn, color: "#fff", borderRadius: "100px", padding: "2px 9px", fontSize: "0.72rem", fontWeight: 700 }}>
+                      {unanswered.length} unanswered
+                    </span>
+                  )}
+                </h3>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  {[["all", `All (${evQA.length})`], ["unanswered", `Unanswered (${unanswered.length})`], ["answered", `Answered (${answered.length})`]].map(([val, label]) => (
+                    <button key={val} onClick={() => setQaFilter(val)}
+                      style={{ background: qaFilter === val ? T.green1 : T.bg, color: qaFilter === val ? "#fff" : T.textSoft, border: `1px solid ${qaFilter === val ? T.green1 : T.border}`, borderRadius: "7px", padding: "5px 13px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.75rem", fontWeight: qaFilter === val ? 700 : 400, transition: "all 0.15s" }}>
+                      {label}
+                    </button>
+                  ))}
+                  {evQA.length > 0 && (
+                    <button onClick={() => loadQA(ev.id).catch(() => {})}
+                      style={{ background: T.cream, color: T.textSoft, border: `1px solid ${T.border}`, borderRadius: "7px", padding: "5px 11px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.75rem" }}>
+                      ↻ Refresh
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {evQA.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "2.5rem", color: T.stoneL, fontSize: "0.875rem" }}>
+                  <div style={{ fontSize: "2rem", marginBottom: "8px" }}>💬</div>
+                  No questions have been asked yet for this event.
+                </div>
+              ) : filtered.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "2rem", color: T.stoneL, fontSize: "0.875rem" }}>
+                  No {qaFilter} questions.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: "14px" }}>
+                  {filtered.map(q => (
+                    <div key={q.id} style={{ background: q.answer ? `${T.green1}06` : T.cream, border: `1px solid ${q.answer ? T.green3 + "60" : T.border}`, borderRadius: "12px", padding: "16px 18px", transition: "all 0.15s" }}>
+                      {/* Question row */}
+                      <div style={{ display: "flex", gap: "10px", marginBottom: q.answer ? "12px" : "10px" }}>
+                        <div style={{ width: "26px", height: "26px", borderRadius: "50%", background: T.gold, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.72rem", flexShrink: 0, marginTop: "1px" }}>Q</div>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ color: T.text, fontSize: "0.9rem", margin: "0 0 4px", fontWeight: 600, lineHeight: 1.55 }}>{q.question}</p>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            <span style={{ color: T.stoneL, fontSize: "0.72rem" }}>Asked by <strong style={{ color: T.textSoft }}>{q.userName}</strong> · {q.createdAt ? new Date(q.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}</span>
+                            {q.answer && <span style={{ background: T.green5, color: T.green1, borderRadius: "4px", padding: "1px 7px", fontSize: "0.68rem", fontWeight: 700 }}>✓ Answered</span>}
+                            {!q.answer && <span style={{ background: "#FEF3C7", color: "#92400E", borderRadius: "4px", padding: "1px 7px", fontSize: "0.68rem", fontWeight: 700 }}>⏳ Pending</span>}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "6px", flexShrink: 0, alignSelf: "flex-start" }}>
+                          {!q.answer && (
+                            <button onClick={() => { setAdminAnswerFor(adminAnswerFor === q.id ? null : q.id); setAdminAnswerText(""); }}
+                              style={{ background: adminAnswerFor === q.id ? T.border : `linear-gradient(135deg,${T.green1},${T.green2})`, color: adminAnswerFor === q.id ? T.textSoft : "#fff", border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+                              {adminAnswerFor === q.id ? "Cancel" : "✍️ Answer"}
+                            </button>
+                          )}
+                          {q.answer && (
+                            <button onClick={() => { setAdminAnswerFor(adminAnswerFor === q.id ? null : q.id); setAdminAnswerText(q.answer); }}
+                              style={{ background: T.cream, color: T.textSoft, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+                              {adminAnswerFor === q.id ? "Cancel" : "✏️ Edit"}
+                            </button>
+                          )}
+                          <button onClick={() => handleDeleteQ(q.id)}
+                            style={{ background: "#FEE2E2", color: T.warn, border: `1px solid #FECACA`, borderRadius: "8px", padding: "6px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.78rem" }}>
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Existing answer display */}
+                      {q.answer && adminAnswerFor !== q.id && (
+                        <div style={{ display: "flex", gap: "10px", background: `${T.green1}0A`, borderRadius: "10px", padding: "12px 14px", borderLeft: `3px solid ${T.green1}` }}>
+                          <div style={{ width: "26px", height: "26px", borderRadius: "50%", background: T.green1, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "0.72rem", flexShrink: 0, marginTop: "1px" }}>A</div>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ color: T.textMid, fontSize: "0.875rem", margin: "0 0 4px", lineHeight: 1.6 }}>{q.answer}</p>
+                            {q.answeredAt && <span style={{ color: T.stoneL, fontSize: "0.68rem" }}>Answered {new Date(q.answeredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Answer / edit form */}
+                      {adminAnswerFor === q.id && (
+                        <div style={{ marginTop: "12px", background: "#fff", borderRadius: "10px", padding: "14px", border: `1px solid ${T.green3}60` }}>
+                          <div style={{ color: T.stoneL, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
+                            {q.answer ? "Edit your answer" : "Write your answer"}
+                          </div>
+                          <textarea value={adminAnswerText} onChange={e => setAdminAnswerText(e.target.value)}
+                            placeholder="Type your answer for the community to see…" rows={3}
+                            style={{ width: "100%", padding: "10px 13px", borderRadius: "9px", border: `1px solid ${T.border}`, background: T.cream, fontFamily: "inherit", fontSize: "0.875rem", resize: "vertical", outline: "none", color: T.text, boxSizing: "border-box" }} />
+                          <div style={{ display: "flex", gap: "8px", marginTop: "10px", justifyContent: "flex-end" }}>
+                            <button onClick={() => { setAdminAnswerFor(null); setAdminAnswerText(""); }}
+                              style={{ background: T.bg, color: T.textSoft, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem" }}>
+                              Cancel
+                            </button>
+                            <button onClick={() => handleAdminAnswer(q.id)} disabled={!adminAnswerText.trim()}
+                              style={{ background: adminAnswerText.trim() ? `linear-gradient(135deg,${T.green1},${T.green2})` : T.border, color: adminAnswerText.trim() ? "#fff" : T.stoneL, border: "none", borderRadius: "8px", padding: "8px 20px", cursor: adminAnswerText.trim() ? "pointer" : "default", fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem", transition: "all 0.15s" }}>
+                              {q.answer ? "Save Changes" : "Post Answer"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── DANGER ZONE ── */}
         <div style={{ background: "#FEF2F2", border: `1px solid #FECACA`, borderRadius: "16px", padding: "20px 22px", marginTop: "4px" }}>
           <h3 style={{ color: T.warn, fontFamily: "'Lora',serif", fontSize: "1rem", margin: "0 0 12px", display: "flex", alignItems: "center", gap: "8px" }}>⚠️ Danger Zone</h3>
@@ -6774,7 +6913,7 @@ function AdminDetailView() {
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView() {
-  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig } = useApp();
+  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig, qaItems } = useApp();
   const [dashTab, setDashTab] = useState("events");
   const [archiveSearch, setArchiveSearch] = useState("");
   const [checkinSearch, setCheckinSearch] = useState("");
@@ -6946,6 +7085,7 @@ function DashboardView() {
                   <div style={{ display: "flex", gap: "6px", marginTop: "5px", flexWrap: "wrap" }}>
                     <span style={{ background: T.green5, color: T.green1, borderRadius: "4px", padding: "2px 8px", fontSize: "0.7rem", fontWeight: 600 }}>{ev.registered}/{ev.capacity} registered</span>
                     {ev.vendorInvite && <span style={{ background: `${T.earth}20`, color: T.earth, borderRadius: "4px", padding: "2px 8px", fontSize: "0.7rem", fontWeight: 600 }}>🛖 {(ev.vendors || []).length} apps · {(ev.vendors || []).filter(v => v.status === "approved").length} approved</span>}
+                    {(() => { const unansweredCount = (qaItems[ev.id] || []).filter(q => !q.answer).length; return unansweredCount > 0 ? <span style={{ background: "#FEF3C7", color: "#92400E", borderRadius: "4px", padding: "2px 8px", fontSize: "0.7rem", fontWeight: 700 }}>❓ {unansweredCount} unanswered Q{unansweredCount !== 1 ? "s" : ""}</span> : null; })()}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
