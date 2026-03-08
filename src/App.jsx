@@ -2276,15 +2276,11 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
   [visibleEvents, search, filterCat, filterDate, filterPrice, filterVibe]);
 
   // ─── LOADING SCREEN ────────────────────────────────────────────────────────
-  if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#F7F5F0", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "1rem" }}>
-      <div style={{ fontSize: "3rem" }}>🌿</div>
-      <div style={{ color: "#2D6A4F", fontFamily: "'Lora',serif", fontSize: "1.3rem", fontWeight: 700 }}>New Harmony Life</div>
-      <div style={{ color: "#6B7280", fontSize: "0.9rem" }}>Loading events…</div>
-    </div>
-  );
+  // NOTE: Loading UI is rendered in AppShell (via the `loading` context value)
+  // so that no hooks are called after an early return here.
 
   const value = useMemo(() => ({
+    loading,
     currentUser, setCurrentUser,
     authModal, setAuthModal, authForm, setAuthForm, authErrors, setAuthErrors, authMode, setAuthMode,
     cart, setCart, cartOpen, setCartOpen, cartTotal, cartCount,
@@ -2331,6 +2327,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     termsContent, saveTermsContent,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
+    loading,
     currentUser, authModal, authForm, authErrors, authMode,
     cart, cartOpen, cartTotal, cartCount,
     checkoutInfo, checkoutErrors, checkoutStep, paymentForm, paymentErrors,
@@ -7968,9 +7965,17 @@ function Footer() {
 
 // ─── APP SHELL ────────────────────────────────────────────────────────────────
 function AppShell() {
-  const { view, currentUser, installPrompt, setInstallPrompt, isInstalled, isOnline, setView, openAuth, dashUnlocked } = useApp();
+  const { view, currentUser, installPrompt, setInstallPrompt, isInstalled, isOnline, setView, openAuth, dashUnlocked, loading } = useApp();
   const [showInstallBanner, setShowInstallBanner] = useState(
     () => localStorage.getItem("nh_pwa_dismissed") !== "1"
+  );
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: "#F7F5F0", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "1rem" }}>
+      <div style={{ fontSize: "3rem" }}>🌿</div>
+      <div style={{ color: "#2D6A4F", fontFamily: "'Lora',serif", fontSize: "1.3rem", fontWeight: 700 }}>New Harmony Life</div>
+      <div style={{ color: "#6B7280", fontSize: "0.9rem" }}>Loading events…</div>
+    </div>
   );
 
   const handleInstall = async () => {
