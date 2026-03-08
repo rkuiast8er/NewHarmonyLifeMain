@@ -784,47 +784,11 @@ You are visiting a working farm as a participant who is either observing or cont
   const vendorPhotoRef = useRef();
 
   // ─── LOAD DATA FROM SUPABASE ON MOUNT ─────────────────────────────────────
-  useEffect(() => {
-    const init = async () => {
-      try {
-        // Restore session
-        const { data: { user } } = supabase.auth.getUser();
-        if (user) {
-          // Try to load profile &mdash; fall back to user metadata if RLS causes issues
-          try {
-            const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-            if (profile) {
-              setCurrentUser(normalizeUser({ ...profile, email: user.email }));
-            } else {
-              // Fallback: build profile from auth metadata
-              const meta = user.user_metadata || {};
-              setCurrentUser(normalizeUser({
-                id: user.id, email: user.email,
-                first_name: meta.first_name || "", last_name: meta.last_name || "",
-                phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
-                avatar_color: "#40916C", is_admin: false,
-              }));
-            }
-          } catch (profileErr) {
-            console.warn("Profile fetch failed, using metadata fallback:", profileErr);
-            const meta = user.user_metadata || {};
-            setCurrentUser(normalizeUser({
-              id: user.id, email: user.email,
-              first_name: meta.first_name || "", last_name: meta.last_name || "",
-              phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
-              avatar_color: "#40916C", is_admin: false,
-            }));
-          }
-        }
-        // Load events with tiers and vendors
-        await loadEvents();
-        // Load tickets if logged in
-        if (user) await loadMyTickets(user.id);
-      } catch (e) { console.error("Init error:", e); }
-      setLoading(false);
-    };
-    init();
-  }, []);
+  // NOTE: useEffect is declared below loadEvents and loadMyTickets so that
+  // those const functions are in scope when the effect runs. const functions
+  // are NOT hoisted — calling them before their declaration throws a
+  // ReferenceError that silently swallows in the catch block and leaves
+  // loading=true forever (white screen).
 
   const loadEvents = async () => {
     const { data: evData } = await supabase.from("events").select("*").order("start_date", { ascending: true });
@@ -901,6 +865,51 @@ You are visiting a working farm as a participant who is either observing or cont
       status: t.status, checkedIn: t.checked_in, checkinTime: t.checkin_time,
     })));
   };
+
+  // ─── LOAD DATA FROM SUPABASE ON MOUNT ─────────────────────────────────────
+  // Placed here so loadEvents and loadMyTickets (const functions above) are
+  // fully in scope before the effect body executes.
+  useEffect(() => {
+    const init = async () => {
+      try {
+        // Restore session
+        const { data: { user } } = supabase.auth.getUser();
+        if (user) {
+          // Try to load profile — fall back to user metadata if RLS causes issues
+          try {
+            const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+            if (profile) {
+              setCurrentUser(normalizeUser({ ...profile, email: user.email }));
+            } else {
+              // Fallback: build profile from auth metadata
+              const meta = user.user_metadata || {};
+              setCurrentUser(normalizeUser({
+                id: user.id, email: user.email,
+                first_name: meta.first_name || "", last_name: meta.last_name || "",
+                phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
+                avatar_color: "#40916C", is_admin: false,
+              }));
+            }
+          } catch (profileErr) {
+            console.warn("Profile fetch failed, using metadata fallback:", profileErr);
+            const meta = user.user_metadata || {};
+            setCurrentUser(normalizeUser({
+              id: user.id, email: user.email,
+              first_name: meta.first_name || "", last_name: meta.last_name || "",
+              phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
+              avatar_color: "#40916C", is_admin: false,
+            }));
+          }
+        }
+        // Load events with tiers and vendors
+        await loadEvents();
+        // Load tickets if logged in
+        if (user) await loadMyTickets(user.id);
+      } catch (e) { console.error("Init error:", e); }
+      setLoading(false);
+    };
+    init();
+  }, []);
 
   // ─── DERIVED STATE ─────────────────────────────────────────────────────────
   const selectedEvent = events.find(e => e.id === selectedId) || null;
