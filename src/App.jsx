@@ -1,9 +1,9 @@
 // ============================================================
-// NEW HARMONY LIFE EVENTS — FULL BUNDLED SINGLE-FILE VERSION
+// NEW HARMONY LIFE EVENTS &mdash; FULL BUNDLED SINGLE-FILE VERSION
 // For review purposes. Production uses the modular src/ layout.
 // ============================================================
 
-import React, { createContext, useContext, useState, useRef, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useRef, useEffect } from "react";
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 // Load jsQR for QR scanning
@@ -22,7 +22,7 @@ if (typeof window !== "undefined" && !window.Recharts) {
 const SUPABASE_URL = "https://eaiutiqyrggihrunezjc.supabase.co";
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhaXV0aXF5cmdnaWhydW5lempjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MDM5NDgsImV4cCI6MjA4ODM3OTk0OH0.zbtmgrt4ou1JxMe4O5givGu-Z1W42I__quQD2Z4aa2o";
 
-// Lightweight Supabase client — no npm needed
+// Lightweight Supabase client &mdash; no npm needed
 const supabase = (() => {
   // REST API headers (PostgREST) — never sent to Auth endpoints
   const restHeaders = {
@@ -207,7 +207,7 @@ const VENDOR_TYPES = [
 ];
 
 const BOOTH_SIZES = [
-  "Small – 3 ft table", "Standard – 6 ft table", "10x10 ft tent space",
+  "Small &ndash; 3 ft table", "Standard &ndash; 6 ft table", "10x10 ft tent space",
   "10x20 ft tent space", "10x30 ft tent space", "20x20 ft tent space", "Other",
 ];
 
@@ -220,10 +220,64 @@ const DISCLAIMERS = [
 ];
 
 
+const INITIAL_EVENTS = [
+  {
+    id: "1", title: "Harvest Moon Festival", category: "Festival",
+    startDate: "2026-09-12", endDate: "2026-09-14", time: "10:00", endTime: "21:00",
+    location: "Harmony Meadows Farm", address: "1402 Countryside Rd, Moville, IA",
+    description: "Three days of music, local food, artisan markets, and community celebration beneath the harvest moon. Bring the whole family for an unforgettable autumn gathering.",
+    capacity: 600, registered: 421, photos: [], color: "#8B6F47",
+    organizer: "New Harmony Life", tags: ["family", "outdoor", "music", "food"],
+    online: false, vendorInvite: true, showVendors: true,
+    vendorDeadline: "2026-08-01", profitModel: "sharing", hostPct: 15,
+    vendorInfo: "We welcome local farmers, artisan producers, and craft vendors. Booth spaces are 10x10 ft. Limited spaces &mdash; apply early!",
+    waitlist: [],
+    ticketTiers: [
+      { id: "t1", name: "Weekend Pass", price: 35, capacity: 400, sold: 280, description: "Full 3-day access" },
+      { id: "t2", name: "Day Pass", price: 15, capacity: 150, sold: 120, description: "Single day entry" },
+      { id: "t3", name: "Family Bundle (4)", price: 110, capacity: 50, sold: 21, description: "2 adults + 2 children" },
+    ],
+    vendors: [
+      { id: "v1", businessName: "Sunrise Acres", contactName: "Mary Kowalski", email: "mary@sunriseacres.com", phone: "712-555-0101", vendorType: "Produce & Vegetables", description: "Certified organic heirloom vegetables grown right here in Woodbury County.", spaceNeeded: "10x10", yearsInBusiness: "8", hasPermit: true, electricNeeded: false, tentOwned: true, website: "", instagram: "@sunriseacres", comments: "", city: "Moville", state: "IA", status: "approved" },
+      { id: "v2", businessName: "Prairie Honey Co.", contactName: "Dale Foss", email: "dale@prairiehoney.com", phone: "712-555-0188", vendorType: "Honey & Preserves", description: "Raw wildflower honey, infused honeys, and seasonal jams from our family apiary.", spaceNeeded: "10x10", yearsInBusiness: "14", hasPermit: true, electricNeeded: false, tentOwned: true, website: "prairiehoney.com", instagram: "", comments: "", city: "Sioux City", state: "IA", status: "approved" },
+      { id: "v3", businessName: "Heartland Blooms", contactName: "Sofia Ramos", email: "sofia@heartlandblooms.com", phone: "712-555-0244", vendorType: "Flowers", description: "Fresh-cut seasonal bouquets and dried flower arrangements from our cut flower farm.", spaceNeeded: "10x20", yearsInBusiness: "3", hasPermit: true, electricNeeded: false, tentOwned: false, website: "", instagram: "@heartlandblooms", comments: "Will need to borrow a tent if available.", city: "Moville", state: "IA", status: "pending" },
+    ],
+  },
+  {
+    id: "2", title: "Forest Bathing & Mindfulness Walk", category: "Wellness",
+    startDate: "2026-04-18", endDate: "2026-04-18", time: "08:00", endTime: "11:00",
+    location: "Loess Hills State Forest", address: "Preparation Canyon, IA",
+    description: "A guided morning walk through ancient bluffs and native prairie. Learn the Japanese practice of shinrin-yoku &mdash; forest bathing &mdash; and return home feeling restored.",
+    capacity: 40, registered: 34, photos: [], color: "#2D6A4F",
+    organizer: "Prairie Roots Wellness", tags: ["nature", "mindfulness", "free", "outdoor"],
+    online: false, vendorInvite: false, showVendors: false, vendorDeadline: "", vendorInfo: "", profitModel: "vendor-keeps", hostPct: 0,
+    waitlist: [],
+    ticketTiers: [
+      { id: "t1", name: "General Admission", price: 0, capacity: 40, sold: 34, description: "Free &mdash; limited to 40 participants" },
+    ],
+    vendors: [],
+  },
+  {
+    id: "3", title: "Seed-to-Table Cooking Workshop", category: "Workshop",
+    startDate: "2026-05-02", endDate: "2026-05-03", time: "09:00", endTime: "16:00",
+    location: "Community Kitchen, Moville", address: "210 Main St, Moville, IA",
+    description: "A two-day hands-on experience covering garden planning, seasonal harvesting, fermentation, and preparing whole-food meals from scratch with local ingredients.",
+    capacity: 24, registered: 19, photos: [], color: "#40916C",
+    organizer: "Heartland Kitchen Collective", tags: ["cooking", "gardening", "local food"],
+    online: false, vendorInvite: false, showVendors: false, vendorDeadline: "", vendorInfo: "", profitModel: "vendor-keeps", hostPct: 0,
+    waitlist: [],
+    ticketTiers: [
+      { id: "t1", name: "Standard", price: 85, capacity: 20, sold: 17, description: "Two-day workshop access" },
+      { id: "t2", name: "Early Bird", price: 65, capacity: 4, sold: 2, description: "Discounted early registration" },
+    ],
+    vendors: [],
+  },
+];
+
 const EMPTY_VENDOR_APP = {
   businessName: "", contactName: "", email: "", phone: "", city: "", state: "",
   vendorType: "Produce & Vegetables", otherType: "",
-  description: "", spaceNeeded: "Small – 3 ft table", yearsInBusiness: "",
+  description: "", spaceNeeded: "Small &ndash; 3 ft table", yearsInBusiness: "",
   hasPermit: false, electricNeeded: false, tentOwned: false,
   boothNeighborPref: "", website: "", instagram: "", comments: "", photo: null, photos: [],
   d1: false, d2: false, d3: false, d4: false, d5: false,
@@ -287,7 +341,7 @@ const fmtTime = (t) => {
 const dateRange = (ev) => {
   if (!ev.startDate) return "";
   if (!ev.endDate || ev.startDate === ev.endDate) return fmt(ev.startDate);
-  return `${fmtShort(ev.startDate)} – ${fmt(ev.endDate)}`;
+  return `${fmtShort(ev.startDate)} &ndash; ${fmt(ev.endDate)}`;
 };
 const multiDay = (ev) => ev.endDate && ev.endDate !== ev.startDate;
 const isExpired = (ev) => {
@@ -441,15 +495,6 @@ const initials = (u) => {
 };
 
 // ─── COUNTDOWN TIMER ──────────────────────────────────────────────────────────
-// Extracted outside CountdownTimer so it is not recreated on every tick
-function CountdownBox({ val, label }) {
-  return (
-    <div style={{ textAlign: "center", minWidth: "52px" }}>
-      <div style={{ background: T.bgDeep, color: T.green3, borderRadius: "10px", padding: "10px 8px", fontFamily: "'Lora',serif", fontSize: "1.6rem", fontWeight: 700, lineHeight: 1, minWidth: "52px" }}>{String(val).padStart(2, "0")}</div>
-      <div style={{ color: T.stoneL, fontSize: "0.65rem", marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
-    </div>
-  );
-}
 function CountdownTimer({ ev }) {
   const calcTime = () => {
     const target = new Date(`${ev.startDate}T${ev.time || "00:00"}:00`);
@@ -461,29 +506,29 @@ function CountdownTimer({ ev }) {
     const s = Math.floor((diff % 60000) / 1000);
     return { d, h, m, s, diff };
   };
-  // Keep a ref to the latest calcTime so the setInterval callback always
-  // calls the current version without needing to restart on every ev change.
-  const calcTimeRef = useRef(calcTime);
-  calcTimeRef.current = calcTime;
-
   const [time, setTime] = useState(calcTime);
   useEffect(() => {
-    setTime(calcTimeRef.current()); // sync immediately when ev changes
-    const interval = setInterval(() => setTime(calcTimeRef.current()), 1000);
+    const interval = setInterval(() => setTime(calcTime()), 1000);
     return () => clearInterval(interval);
   }, [ev.startDate, ev.time]);
   if (!time) return null;
+  const Box = ({ val, label }) => (
+    <div style={{ textAlign: "center", minWidth: "52px" }}>
+      <div style={{ background: T.bgDeep, color: T.green3, borderRadius: "10px", padding: "10px 8px", fontFamily: "'Lora',serif", fontSize: "1.6rem", fontWeight: 700, lineHeight: 1, minWidth: "52px" }}>{String(val).padStart(2, "0")}</div>
+      <div style={{ color: T.stoneL, fontSize: "0.65rem", marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
+    </div>
+  );
   return (
     <div style={{ background: `linear-gradient(135deg,${T.bgDeep},${T.bgMid})`, borderRadius: "14px", padding: "16px 20px", marginBottom: "18px", border: `1px solid ${T.green1}30` }}>
       <div style={{ color: T.green4, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "12px" }}>⏳ Event Starts In</div>
       <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "center" }}>
-        {time.d > 0 && <CountdownBox val={time.d} label="Days" />}
+        {time.d > 0 && <Box val={time.d} label="Days" />}
         {time.d > 0 && <div style={{ color: T.green3, fontSize: "1.4rem", fontWeight: 300, marginBottom: "18px" }}>:</div>}
-        <CountdownBox val={time.h} label="Hours" />
+        <Box val={time.h} label="Hours" />
         <div style={{ color: T.green3, fontSize: "1.4rem", fontWeight: 300, marginBottom: "18px" }}>:</div>
-        <CountdownBox val={time.m} label="Min" />
+        <Box val={time.m} label="Min" />
         <div style={{ color: T.green3, fontSize: "1.4rem", fontWeight: 300, marginBottom: "18px" }}>:</div>
-        <CountdownBox val={time.s} label="Sec" />
+        <Box val={time.s} label="Sec" />
       </div>
     </div>
   );
@@ -553,23 +598,6 @@ function PasswordInput({ value, onChange, onKeyDown, placeholder, style, error }
 // ─── CONTEXT ──────────────────────────────────────────────────────────────────
 const AppContext = createContext(null);
 
-// Normalizes a raw profile/metadata object into a single consistent shape so
-// that every consumer can use `user.firstName` / `user.lastName` / `user.avatarColor`
-// without dual-key fallbacks scattered across the codebase.
-const normalizeUser = (raw) => {
-  if (!raw) return null;
-  return {
-    ...raw,
-    // Canonical camelCase aliases — components should use these
-    firstName:   raw.firstName   || raw.first_name   || "",
-    lastName:    raw.lastName    || raw.last_name     || "",
-    avatarColor: raw.avatarColor || raw.avatar_color  || "#40916C",
-    isAdmin:     raw.isAdmin     || raw.is_admin      || false,
-    emailOptIn:  raw.emailOptIn  || raw.email_opt_in  || false,
-    // Keep snake_case originals intact for Supabase writes
-  };
-};
-
 function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -584,8 +612,23 @@ function AppProvider({ children }) {
   const [resendApiKey, setResendApiKey] = useState(localStorage.getItem("nh_resend_key") || "");
 
   // ── Site-wide configurable vibe tags ──────────────────────────────────────
-  // Uses VIBE_TAGS module constant as the single source of truth
-  const _defaultVibeConfig = { enabled: true, items: VIBE_TAGS };
+  const _defaultVibeConfig = {
+    enabled: true,
+    items: [
+      { id: "dog-friendly",    emoji: "🐾", label: "Dog-Friendly" },
+      { id: "kid-friendly",    emoji: "👶", label: "Kid-Friendly" },
+      { id: "bring-a-blanket", emoji: "🧺", label: "Bring a Blanket" },
+      { id: "limited-spots",   emoji: "⚡", label: "Limited Spots" },
+      { id: "rain-or-shine",   emoji: "🌦️", label: "Rain or Shine" },
+      { id: "all-ages",        emoji: "👨‍👩‍👧", label: "All Ages" },
+      { id: "21-plus",         emoji: "🍺", label: "21+" },
+      { id: "outdoors",        emoji: "🌿", label: "Outdoors" },
+      { id: "indoor",          emoji: "🏠", label: "Indoor" },
+      { id: "free-parking",    emoji: "🅿️", label: "Free Parking" },
+      { id: "wheelchair",      emoji: "♿", label: "Accessible" },
+      { id: "bring-your-own",  emoji: "🎒", label: "Bring Your Own" },
+    ],
+  };
   const [vibeConfig, setVibeConfig] = useState(() => {
     try { const s = localStorage.getItem("nh_vibe_config"); return s ? JSON.parse(s) : _defaultVibeConfig; } catch { return _defaultVibeConfig; }
   });
@@ -607,8 +650,13 @@ function AppProvider({ children }) {
   const saveSortConfig = (cfg) => { setSortConfig(cfg); localStorage.setItem("nh_sort_config", JSON.stringify(cfg)); };
 
   // ── Site-wide configurable event categories ───────────────────────────
-  // Uses CATEGORIES module constant as the single source of truth
-  const _defaultCategoryConfig = { enabled: true, items: CATEGORIES };
+  const _defaultCategoryConfig = {
+    enabled: true,
+    items: [
+      "Community", "Workshop", "Festival", "Music", "Food & Drink",
+      "Arts & Crafts", "Wellness", "Sports & Nature", "Charity", "Other",
+    ],
+  };
   const [categoryConfig, setCategoryConfig] = useState(() => {
     try { const s = localStorage.getItem("nh_category_config"); return s ? JSON.parse(s) : _defaultCategoryConfig; } catch { return _defaultCategoryConfig; }
   });
@@ -712,7 +760,7 @@ You are visiting a working farm as a participant who is either observing or cont
   const [reviews, setReviews] = useState({}); // { eventId: [{id,userId,userName,rating,text,createdAt}] }
   const [qaItems, setQaItems] = useState({}); // { eventId: [{id,userId,userName,question,answer,createdAt,answeredAt}] }
   const [interests, setInterests] = useState(() => { try { return JSON.parse(localStorage.getItem("nh_interests") || "{}"); } catch { return {}; } });
-  const [following, setFollowing] = useState(() => { try { return JSON.parse(localStorage.getItem("nh_following") || "[]"); } catch { return []; } });
+  const [following, setFollowing] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem("nh_following") || "[]")); } catch { return new Set(); } });
   const [swRegistered, setSwRegistered] = useState(false);
   // ─── NEW FEATURE STATE ───────────────────────────────────────────────────────
   const [eventPhotos, setEventPhotos] = useState({}); // { eventId: [{id, url, caption, uploadedBy, uploadedAt}] }
@@ -730,29 +778,59 @@ You are visiting a working farm as a participant who is either observing or cont
   const vendorPhotoRef = useRef();
 
   // ─── LOAD DATA FROM SUPABASE ON MOUNT ─────────────────────────────────────
-  // NOTE: useEffect is declared below loadEvents and loadMyTickets so that
-  // those const functions are in scope when the effect runs. const functions
-  // are NOT hoisted — calling them before their declaration throws a
-  // ReferenceError that silently swallows in the catch block and leaves
-  // loading=true forever (white screen).
+  useEffect(() => {
+    const init = async () => {
+      try {
+        // Restore session
+        const { data: { user } } = supabase.auth.getUser();
+        if (user) {
+          // Try to load profile &mdash; fall back to user metadata if RLS causes issues
+          try {
+            const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+            if (profile) {
+              setCurrentUser({ ...profile, email: user.email });
+            } else {
+              // Fallback: build profile from auth metadata
+              const meta = user.user_metadata || {};
+              setCurrentUser({
+                id: user.id, email: user.email,
+                first_name: meta.first_name || "", last_name: meta.last_name || "",
+                phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
+                avatar_color: "#40916C", is_admin: false,
+              });
+            }
+          } catch (profileErr) {
+            console.warn("Profile fetch failed, using metadata fallback:", profileErr);
+            const meta = user.user_metadata || {};
+            setCurrentUser({
+              id: user.id, email: user.email,
+              first_name: meta.first_name || "", last_name: meta.last_name || "",
+              phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
+              avatar_color: "#40916C", is_admin: false,
+            });
+          }
+        }
+        // Load events with tiers and vendors
+        await loadEvents();
+        // Load tickets if logged in
+        if (user) await loadMyTickets(user.id);
+      } catch (e) { console.error("Init error:", e); }
+      setLoading(false);
+    };
+    init();
+  }, []);
 
   const loadEvents = async () => {
-    // Fire all 4 queries in parallel — previously sequential, adding ~3× latency
-    const [
-      { data: evData },
-      { data: tiers },
-      { data: vendors },
-      { data: waitlist },
-    ] = await Promise.all([
-      supabase.from("events").select("*").order("start_date", { ascending: true }),
-      supabase.from("ticket_tiers").select("*").order("sort_order", { ascending: true }),
-      supabase.from("vendors").select("*"),
-      supabase.from("waitlist").select("*"),
-    ]);
+    const { data: evData } = await supabase.from("events").select("*").order("start_date", { ascending: true });
     if (!evData) return;
+    // Diagnostic: log first event's photos field to confirm Supabase is returning it
+    if (evData.length > 0) console.log("[NH] First event photos field:", evData[0].photos, "| type:", typeof evData[0].photos);
     // Load locally-stored photos and extended fields (fallback for missing Supabase columns)
     const localPhotosMap = localPhotosLoad();
     const localExtMap = (() => { try { return JSON.parse(localStorage.getItem("nh_event_extended_v1") || "{}"); } catch { return {}; } })();
+    const { data: tiers } = await supabase.from("ticket_tiers").select("*").order("sort_order", { ascending: true });
+    const { data: vendors } = await supabase.from("vendors").select("*");
+    const { data: waitlist } = await supabase.from("waitlist").select("*");
     const mapped = evData.map(ev => ({
       id: ev.id,
       title: ev.title, category: ev.category,
@@ -818,51 +896,6 @@ You are visiting a working farm as a participant who is either observing or cont
     })));
   };
 
-  // ─── LOAD DATA FROM SUPABASE ON MOUNT ─────────────────────────────────────
-  // Placed here so loadEvents and loadMyTickets (const functions above) are
-  // fully in scope before the effect body executes.
-  useEffect(() => {
-    const init = async () => {
-      try {
-        // Restore session
-        const { data: { user } } = supabase.auth.getUser();
-        if (user) {
-          // Try to load profile — fall back to user metadata if RLS causes issues
-          try {
-            const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-            if (profile) {
-              setCurrentUser(normalizeUser({ ...profile, email: user.email }));
-            } else {
-              // Fallback: build profile from auth metadata
-              const meta = user.user_metadata || {};
-              setCurrentUser(normalizeUser({
-                id: user.id, email: user.email,
-                first_name: meta.first_name || "", last_name: meta.last_name || "",
-                phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
-                avatar_color: "#40916C", is_admin: false,
-              }));
-            }
-          } catch (profileErr) {
-            console.warn("Profile fetch failed, using metadata fallback:", profileErr);
-            const meta = user.user_metadata || {};
-            setCurrentUser(normalizeUser({
-              id: user.id, email: user.email,
-              first_name: meta.first_name || "", last_name: meta.last_name || "",
-              phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
-              avatar_color: "#40916C", is_admin: false,
-            }));
-          }
-        }
-        // Load events with tiers and vendors
-        await loadEvents();
-        // Load tickets if logged in
-        if (user) await loadMyTickets(user.id);
-      } catch (e) { console.error("Init error:", e); }
-      setLoading(false);
-    };
-    init();
-  }, []);
-
   // ─── DERIVED STATE ─────────────────────────────────────────────────────────
   const selectedEvent = events.find(e => e.id === selectedId) || null;
   const activeEvents = events.filter(ev => !isExpired(ev));
@@ -908,19 +941,13 @@ You are visiting a working farm as a participant who is either observing or cont
       email: currentUser.email,
     });
     if (error) { showToast("Already on waitlist or error occurred.", "warn"); return; }
-    setEvents(prev => prev.map(e => e.id !== evId ? e : {
-      ...e,
-      waitlist: [...(e.waitlist || []), { name: `${currentUser.firstName} ${currentUser.lastName}`, email: currentUser.email, joinedAt: new Date().toISOString() }],
-    }));
+    await loadEvents();
     showToast("🌿 You've been added to the waitlist!");
   };
   const leaveWaitlist = async (evId) => {
     if (!currentUser) return;
     await supabase.from("waitlist").delete().eq("event_id", evId).eq("user_id", currentUser.id);
-    setEvents(prev => prev.map(e => e.id !== evId ? e : {
-      ...e,
-      waitlist: (e.waitlist || []).filter(w => w.email !== currentUser.email),
-    }));
+    await loadEvents();
     showToast("Removed from waitlist.", "warn");
   };
 
@@ -939,7 +966,7 @@ You are visiting a working farm as a participant who is either observing or cont
         const now = new Date();
         const daysUntil = eventDate ? Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24)) : 999;
         if (daysUntil >= deadlineDays) {
-          refundMessage = `A full refund will be processed in 5–7 business days.`;
+          refundMessage = `A full refund will be processed in 5&ndash;7 business days.`;
         } else {
           refundMessage = `The refund window (${deadlineDays} days before event) has passed. No refund will be issued.`;
         }
@@ -948,12 +975,12 @@ You are visiting a working farm as a participant who is either observing or cont
         const now = new Date();
         const daysUntil = eventDate ? Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24)) : 999;
         if (daysUntil >= deadlineDays) {
-          refundMessage = `A partial refund will be processed in 5–7 business days.`;
+          refundMessage = `A partial refund will be processed in 5&ndash;7 business days.`;
         } else {
           refundMessage = `The refund window (${deadlineDays} days before event) has passed. No refund will be issued.`;
         }
       } else {
-        refundMessage = "No refund will be issued — this event is rain or shine, no refunds.";
+        refundMessage = "No refund will be issued &mdash; this event is rain or shine, no refunds.";
       }
     }
     await supabase.from("tickets").update({ status: "cancelled" }).eq("id", ticket.id);
@@ -961,7 +988,7 @@ You are visiting a working farm as a participant who is either observing or cont
     const { data: freshTier } = await supabase.from("ticket_tiers").select("sold").eq("id", ticket.tierId).single();
     const newSold = Math.max(0, (freshTier?.sold ?? 0) - ticket.qty);
     await supabase.from("ticket_tiers").update({ sold: newSold }).eq("id", ticket.tierId);
-    // Auto-promote first waitlist entry — send a real email via Resend if configured
+    // Auto-promote first waitlist entry &mdash; send a real email via Resend if configured
     const { data: waitlistEntries } = await supabase.from("waitlist").select("*").eq("event_id", ticket.eventId).order("created_at", { ascending: true }).limit(1);
     if (waitlistEntries && waitlistEntries.length > 0) {
       const first = waitlistEntries[0];
@@ -975,7 +1002,7 @@ You are visiting a working farm as a participant who is either observing or cont
             body: JSON.stringify({
               from: "New Harmony Life <tickets@newharmonylife.com>",
               to: [first.email],
-              subject: `A spot just opened up — ${ev.title}`,
+              subject: `A spot just opened up &mdash; ${ev.title}`,
               html: `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
   <div style="background:#1C2B1A;padding:28px 32px;text-align:center">
@@ -984,7 +1011,7 @@ You are visiting a working farm as a participant who is either observing or cont
   </div>
   <div style="padding:28px 32px">
     <h2 style="color:#1C2B1A;margin:0 0 8px">Good news, ${first.name?.split(" ")[0] || "there"}! 🎉</h2>
-    <p style="color:#6B7280;margin:0 0 20px;line-height:1.6">A spot has just opened up for <strong>${ev.title}</strong> on ${fmt(ev.startDate)}. As the next person on the waitlist, you have first priority — grab your ticket before it's gone!</p>
+    <p style="color:#6B7280;margin:0 0 20px;line-height:1.6">A spot has just opened up for <strong>${ev.title}</strong> on ${fmt(ev.startDate)}. As the next person on the waitlist, you have first priority &mdash; grab your ticket before it's gone!</p>
     <div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:16px 20px;margin-bottom:20px">
       <div style="color:#166534;font-weight:700;font-size:0.9rem;margin-bottom:4px">📍 ${ev.location}</div>
       <div style="color:#4B7C5A;font-size:0.85rem">${dateRange(ev)}${ev.time ? " · " + fmtTime(ev.time) : ""}</div>
@@ -1000,25 +1027,21 @@ You are visiting a working farm as a participant who is either observing or cont
           showToast(`✉️ Waitlist email sent to ${first.name}!`);
         } catch (emailErr) {
           console.warn("Waitlist email failed (non-fatal):", emailErr);
-          showToast(`⚠️ Waitlist email failed for ${first.name} — notify them manually.`, "warn");
+          showToast(`⚠️ Waitlist email failed for ${first.name} &mdash; notify them manually.`, "warn");
         }
       } else {
-        showToast(`✉️ ${first.name} is next on the waitlist — notify them manually if Resend isn't configured.`);
+        showToast(`✉️ ${first.name} is next on the waitlist &mdash; notify them manually if Resend isn't configured.`);
       }
     }
     setMyTickets(prev => prev.map(t => t.ticketId === ticketId ? { ...t, status: "cancelled" } : t));
-    // Optimistically decrement sold count on the affected tier
-    setEvents(prev => prev.map(e => e.id !== ticket.eventId ? e : {
-      ...e,
-      ticketTiers: e.ticketTiers.map(t => t.id === ticket.tierId ? { ...t, sold: Math.max(0, t.sold - ticket.qty) } : t),
-    }));
+    await loadEvents();
     showToast(`Ticket cancelled. ${refundMessage}`, refundPolicy === "none" ? "warn" : "warn");
   };
 
   const checkinAttendee = async (evId, ticketId) => {
     const now = new Date().toISOString();
     await supabase.from("tickets").update({ checked_in: true, checkin_time: now }).eq("id", ticketId);
-    // ticketId here is the UUID row id — match against t.id (not t.ticketId which is TKT-xxx)
+    // ticketId here is the UUID row id &mdash; match against t.id (not t.ticketId which is TKT-xxx)
     setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, checkedIn: true, checkinTime: new Date().toLocaleTimeString() } : t));
     showToast("✅ Attendee checked in!");
   };
@@ -1058,7 +1081,7 @@ You are visiting a working farm as a participant who is either observing or cont
     try {
       const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (profile) {
-        setCurrentUser(normalizeUser({ ...profile, email: user.email }));
+        setCurrentUser({ ...profile, email: user.email });
         await loadMyTickets(user.id);
         setAuthModal(null);
         showToast(`🌿 Welcome back, ${profile.first_name || ""}!`);
@@ -1067,7 +1090,7 @@ You are visiting a working farm as a participant who is either observing or cont
     } catch (e) { console.warn("Profile fetch on login failed:", e); }
     // Fallback to metadata
     const meta = user.user_metadata || {};
-    setCurrentUser(normalizeUser({ id: user.id, email: user.email, first_name: meta.first_name || "", last_name: meta.last_name || "", phone: meta.phone || "", city: meta.city || "", state: meta.state || "", avatar_color: "#40916C", is_admin: false }));
+    setCurrentUser({ id: user.id, email: user.email, first_name: meta.first_name || "", last_name: meta.last_name || "", phone: meta.phone || "", city: meta.city || "", state: meta.state || "", avatar_color: "#40916C", is_admin: false });
     await loadMyTickets(user.id);
     setAuthModal(null);
     showToast(`🌿 Welcome back!`);
@@ -1109,7 +1132,7 @@ You are visiting a working farm as a participant who is either observing or cont
     if (hasSession) {
       const { error: profileError } = await supabase.from("profiles").insert(profile);
       if (profileError) console.warn("Profile insert failed (non-fatal):", profileError.message);
-      setCurrentUser(normalizeUser(profile));
+      setCurrentUser(profile);
       setAuthModal(null);
       showToast(`🌿 Welcome to New Harmony, ${authForm.firstName}!`);
     } else {
@@ -1135,11 +1158,11 @@ You are visiting a working farm as a participant who is either observing or cont
       email_opt_in: updates.emailOptIn,
     }).eq("id", currentUser.id);
     if (error) { showToast("Could not save profile: " + error.message, "warn"); return; }
-    setCurrentUser(prev => normalizeUser({ ...prev, first_name: updates.firstName, last_name: updates.lastName, phone: updates.phone, city: updates.city, state: updates.state, email_opt_in: updates.emailOptIn }));
+    setCurrentUser(prev => ({ ...prev, first_name: updates.firstName, last_name: updates.lastName, phone: updates.phone, city: updates.city, state: updates.state, email_opt_in: updates.emailOptIn }));
     showToast("Profile updated ✓");
   };
 
-  // ─── SOCIAL — REVIEWS ──────────────────────────────────────────────────────
+  // ─── SOCIAL &mdash; REVIEWS ──────────────────────────────────────────────────────
   const loadReviews = async (eventId) => {
     const { data } = await supabase.from("reviews").select("*").eq("event_id", eventId).order("created_at", { ascending: false });
     if (data) setReviews(prev => ({ ...prev, [eventId]: data.map(r => ({ id: r.id, userId: r.user_id, userName: r.user_name, rating: r.rating, text: r.review_text, createdAt: r.created_at })) }));
@@ -1157,7 +1180,7 @@ You are visiting a working farm as a participant who is either observing or cont
     showToast("Review removed.", "warn");
   };
 
-  // ─── SOCIAL — Q&A ──────────────────────────────────────────────────────────
+  // ─── SOCIAL &mdash; Q&A ──────────────────────────────────────────────────────────
   const loadQA = async (eventId) => {
     const { data } = await supabase.from("event_qa").select("*").eq("event_id", eventId).order("created_at", { ascending: true });
     if (data) setQaItems(prev => ({ ...prev, [eventId]: data.map(q => ({ id: q.id, userId: q.user_id, userName: q.user_name, question: q.question, answer: q.answer, createdAt: q.created_at, answeredAt: q.answered_at })) }));
@@ -1179,7 +1202,7 @@ You are visiting a working farm as a participant who is either observing or cont
     await loadQA(eventId);
   };
 
-  // ─── SOCIAL — INTEREST (Going / Interested) ────────────────────────────────
+  // ─── SOCIAL &mdash; INTEREST (Going / Interested) ────────────────────────────────
   const toggleInterest = (eventId, type) => {
     if (!currentUser) { showToast("Sign in to mark your interest", "warn"); return; }
     const uid = currentUser.id;
@@ -1201,20 +1224,19 @@ You are visiting a working farm as a participant who is either observing or cont
   };
   const getInterest = (eventId) => interests[eventId] || { going: [], interested: [] };
 
-  // ─── SOCIAL — FOLLOW ORGANIZER ─────────────────────────────────────────────
+  // ─── SOCIAL &mdash; FOLLOW ORGANIZER ─────────────────────────────────────────────
   const toggleFollow = (organizer) => {
     if (!currentUser) { showToast("Sign in to follow organizers", "warn"); return; }
     setFollowing(prev => {
-      const isFollowing = prev.includes(organizer);
-      const next = isFollowing ? prev.filter(o => o !== organizer) : [...prev, organizer];
-      if (isFollowing) showToast(`Unfollowed ${organizer}`);
-      else showToast(`Following ${organizer} 🌿`);
-      localStorage.setItem("nh_following", JSON.stringify(next));
+      const next = new Set(prev);
+      if (next.has(organizer)) { next.delete(organizer); showToast(`Unfollowed ${organizer}`); }
+      else { next.add(organizer); showToast(`Following ${organizer} 🌿`); }
+      localStorage.setItem("nh_following", JSON.stringify([...next]));
       return next;
     });
   };
 
-  // ─── SOCIAL — REFERRAL LINK ────────────────────────────────────────────────
+  // ─── SOCIAL &mdash; REFERRAL LINK ────────────────────────────────────────────────
   const getReferralLink = (eventId) => {
     const base = window.location.href.split("?")[0].split("#")[0];
     const ref = currentUser ? btoa(currentUser.id).replace(/=/g, "").slice(0, 8) : "share";
@@ -1241,7 +1263,7 @@ You are visiting a working farm as a participant who is either observing or cont
     return (referralStats[eventId] || {})[ref] || 0;
   };
 
-  // ─── PRIVATE EVENT — INVITE LINK ──────────────────────────────────────────
+  // ─── PRIVATE EVENT &mdash; INVITE LINK ──────────────────────────────────────────
   const getInviteLink = (ev) => {
     if (!ev?.inviteToken) return null;
     const base = window.location.href.split("?")[0].split("#")[0];
@@ -1364,7 +1386,7 @@ You are visiting a working farm as a participant who is either observing or cont
       try { new Notification(title, { body, icon: "/favicon.ico", tag }); } catch (e) {}
     }
   };
-  // Check reminders on load — fire local notifs for upcoming events user is registered for
+  // Check reminders on load &mdash; fire local notifs for upcoming events user is registered for
   useEffect(() => {
     if (!currentUser || myTickets.length === 0) return;
     const today = new Date();
@@ -1385,9 +1407,9 @@ You are visiting a working farm as a participant who is either observing or cont
         setTimeout(() => sendLocalNotification(`🌿 Tomorrow: ${ev.title}`, `Don't forget! ${ev.title} is tomorrow at ${fmtTime(ev.time)}.`, `reminder-1-${ev.id}`), 500);
       }
     });
-  }, [myTickets, events, currentUser, notifPrefs]);
+  }, [myTickets, events, currentUser]);
 
-  // ─── EVENT DUPLICATION — handled in handleSave/startEdit section below ──────
+  // ─── EVENT DUPLICATION &mdash; handled in handleSave/startEdit section below ──────
 
   // ─── SCHEDULED REMINDERS via Resend ─────────────────────────────────────────
   const scheduleEventReminders = async (eventId) => {
@@ -1427,7 +1449,7 @@ You are visiting a working farm as a participant who is either observing or cont
       // Send 1-week reminder
       for (const t of uniqueEmails) {
         try {
-          await fetch("https://api.resend.com/emails", { method: "POST", headers: { "Authorization": `Bearer ${rKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: "New Harmony Life <tickets@newharmonylife.com>", to: [t.buyer_email], subject: `⏰ 1 week away — ${ev.title}`, html: makeReminderHtml(t.buyer_name?.split(" ")[0] || "there", "1 week away") }) });
+          await fetch("https://api.resend.com/emails", { method: "POST", headers: { "Authorization": `Bearer ${rKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: "New Harmony Life <tickets@newharmonylife.com>", to: [t.buyer_email], subject: `⏰ 1 week away &mdash; ${ev.title}`, html: makeReminderHtml(t.buyer_name?.split(" ")[0] || "there", "1 week away") }) });
           sent++;
         } catch (e) { console.warn("Reminder email failed:", e); }
       }
@@ -1435,16 +1457,16 @@ You are visiting a working farm as a participant who is either observing or cont
       // Send 1-day reminder  
       for (const t of uniqueEmails) {
         try {
-          await fetch("https://api.resend.com/emails", { method: "POST", headers: { "Authorization": `Bearer ${rKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: "New Harmony Life <tickets@newharmonylife.com>", to: [t.buyer_email], subject: `🌿 Tomorrow — ${ev.title}`, html: makeReminderHtml(t.buyer_name?.split(" ")[0] || "there", "Tomorrow") }) });
+          await fetch("https://api.resend.com/emails", { method: "POST", headers: { "Authorization": `Bearer ${rKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: "New Harmony Life <tickets@newharmonylife.com>", to: [t.buyer_email], subject: `🌿 Tomorrow &mdash; ${ev.title}`, html: makeReminderHtml(t.buyer_name?.split(" ")[0] || "there", "Tomorrow") }) });
           sent++;
         } catch (e) { console.warn("Reminder email failed:", e); }
       }
     }
     if (sent > 0) showToast(`📧 Reminders sent to ${sent} attendee${sent !== 1 ? "s" : ""}!`);
-    else showToast("No reminders sent — check timing and Resend key.", "warn");
+    else showToast("No reminders sent &mdash; check timing and Resend key.", "warn");
   };
 
-  // ─── PWA — Service Worker & Install ────────────────────────────────────────
+  // ─── PWA &mdash; Service Worker & Install ────────────────────────────────────────
   useEffect(() => {
     // Install prompt listener
     const onInstallPrompt = e => { e.preventDefault(); setInstallPrompt(e); };
@@ -1512,7 +1534,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       const found = events.find(e => e.id === evId || String(e.id) === evId);
       if (found) { setSelectedId(found.id); setView("detail"); }
     }
-    // Invite token deep link — find the matching private event and open it
+    // Invite token deep link &mdash; find the matching private event and open it
     if (events.length > 0 && window.__nhInviteToken) {
       const token = window.__nhInviteToken;
       window.__nhInviteToken = null;
@@ -1558,10 +1580,6 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
   const completeOrder = async () => {
     if (!validatePayment()) return;
     setProcessing(true);
-    // Snapshot cart immediately — we call setCart([]) later and don't want the
-    // email-build code below to reference stale (empty) state.
-    const cartSnapshot = cart;
-    const cartTotalSnapshot = cartTotal;
     try {
       const orderNum = "NHL-" + Math.random().toString(36).substr(2, 8).toUpperCase();
       const buyerName = `${checkoutInfo.firstName} ${checkoutInfo.lastName}`;
@@ -1602,7 +1620,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       const orderId = fetchedOrder.id;
 
       // Create ticket records — one row per individual ticket (not per cart item)
-      const ticketInserts = cartSnapshot.flatMap(item =>
+      const ticketInserts = cart.flatMap(item =>
         Array.from({ length: item.qty }, () => ({
           ticket_id: genTicketId(),
           order_id: orderId,
@@ -1622,7 +1640,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         }))
       );
 
-      // Use raw fetch for ticket insert — bypasses custom client quirks
+      // Use raw fetch for ticket insert &mdash; bypasses custom client quirks
       const sessionToken = supabase.getSession()?.access_token || SUPABASE_ANON_KEY;
       const ticketRes = await fetch(`${SUPABASE_URL}/rest/v1/tickets`, {
         method: "POST",
@@ -1645,7 +1663,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       }
 
       // Update tier sold counts and event registered count using fresh DB values
-      for (const item of cartSnapshot) {
+      for (const item of cart) {
         const { data: freshTier } = await supabase.from("ticket_tiers").select("sold").eq("id", item.tier.id).single();
         await supabase.from("ticket_tiers").update({ sold: (freshTier?.sold ?? item.tier.sold) + item.qty }).eq("id", item.tier.id);
         const { data: freshEvent } = await supabase.from("events").select("registered").eq("id", item.event.id).single();
@@ -1693,7 +1711,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
             tierIndexes[k] = (tierIndexes[k] || 0) + 1;
             const ticketNum = tierIndexes[k];
             const tierTotal = tierCounts[k];
-            const ev = cartSnapshot.find(i => i.event.id === t.eventId)?.event || {};
+            const ev = cart.find(i => i.event.id === t.eventId)?.event || {};
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(t.ticketId)}&color=1C2B1A&bgcolor=F7F5F0`;
             const eventDate = ev.date ? new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "";
             const eventTime = ev.startTime ? (() => { const [h,m] = ev.startTime.split(":"); const hr = parseInt(h); return `${hr > 12 ? hr-12 : hr || 12}:${m} ${hr >= 12 ? "PM" : "AM"}`; })() : "";
@@ -1731,8 +1749,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
           }).join("");
 
           // Receipt summary rows
-          const receiptRows = cartSnapshot.map(item =>
-            `<tr><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem">${item.event.title} — ${item.tier.name}</td><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem;text-align:center">${item.qty}</td><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem;text-align:right">${item.tier.price === 0 ? "Free" : "$" + (item.tier.price * item.qty).toFixed(2)}</td></tr>`
+          const receiptRows = cart.map(item =>
+            `<tr><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem">${item.event.title} &mdash; ${item.tier.name}</td><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem;text-align:center">${item.qty}</td><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem;text-align:right">${item.tier.price === 0 ? "Free" : "$" + (item.tier.price * item.qty).toFixed(2)}</td></tr>`
           ).join("");
 
           const emailHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#F3F4F6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
@@ -1761,7 +1779,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     <table style="width:100%;border-collapse:collapse;margin-bottom:4px">
       <thead><tr style="background:#F7F5F0"><th style="padding:9px 14px;text-align:left;color:#3D5A38;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Item</th><th style="padding:9px 14px;text-align:center;color:#3D5A38;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Qty</th><th style="padding:9px 14px;text-align:right;color:#3D5A38;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Price</th></tr></thead>
       <tbody>${receiptRows}</tbody>
-      <tfoot><tr style="background:#F7F5F0"><td colspan="2" style="padding:11px 14px;font-weight:700;color:#1C2B1A;font-size:0.9rem">Total</td><td style="padding:11px 14px;font-weight:700;color:#1C2B1A;text-align:right;font-size:0.9rem">${cartTotalSnapshot === 0 ? "Free" : "$" + cartTotalSnapshot.toFixed(2)}</td></tr></tfoot>
+      <tfoot><tr style="background:#F7F5F0"><td colspan="2" style="padding:11px 14px;font-weight:700;color:#1C2B1A;font-size:0.9rem">Total</td><td style="padding:11px 14px;font-weight:700;color:#1C2B1A;text-align:right;font-size:0.9rem">${cartTotal === 0 ? "Free" : "$" + cartTotal.toFixed(2)}</td></tr></tfoot>
     </table>
     <p style="color:#9CA3AF;font-size:0.75rem;margin:14px 0 0">Payment method: ${payMethod === "card" ? "Credit / Debit Card" : payMethod === "paypal" ? "PayPal" : payMethod}</p>
   </div>
@@ -1780,7 +1798,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
             body: JSON.stringify({
               from: "New Harmony Life <tickets@newharmonylife.com>",
               to: [checkoutInfo.email],
-              subject: `Your tickets: ${cartSnapshot.map(i => i.event.title).filter((v,i,a) => a.indexOf(v)===i).join(", ")} — ${orderNum}`,
+              subject: `Your tickets: ${cart.map(i => i.event.title).filter((v,i,a) => a.indexOf(v)===i).join(", ")} — ${orderNum}`,
               html: emailHtml,
             }),
           });
@@ -1789,22 +1807,9 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         }
       }
 
-      setOrderComplete({ orderNum, tickets: newTickets, total: cartTotalSnapshot, buyer: checkoutInfo });
+      setOrderComplete({ orderNum, tickets: newTickets, total: cartTotal, buyer: checkoutInfo });
+      await loadEvents();
       setCart([]);
-      // Optimistically update sold counts and registered count for all purchased tiers
-      setEvents(prev => prev.map(ev => {
-        const itemsForEvent = cartSnapshot.filter(i => i.event.id === ev.id);
-        if (!itemsForEvent.length) return ev;
-        const qtyForEvent = itemsForEvent.reduce((s, i) => s + i.qty, 0);
-        return {
-          ...ev,
-          registered: (ev.registered || 0) + qtyForEvent,
-          ticketTiers: ev.ticketTiers.map(tier => {
-            const item = itemsForEvent.find(i => i.tier.id === tier.id);
-            return item ? { ...tier, sold: tier.sold + item.qty } : tier;
-          }),
-        };
-      }));
       setCheckoutStep(3);
     } catch (e) {
       showToast("Something went wrong: " + e.message, "warn");
@@ -1929,7 +1934,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
             const uniqueEmails = [...new Map(allTickets.map(t => [t.buyer_email, t])).values()];
             let notified = 0;
             const changeLines = [];
-            if (dateChanged) changeLines.push(`<li style="margin-bottom:6px">📅 <strong>New date/time:</strong> ${fmt(form.startDate)}${form.endDate && form.endDate !== form.startDate ? ` – ${fmt(form.endDate)}` : ""}${form.time ? ` at ${fmtTime(form.time)}` : ""}</li>`);
+            if (dateChanged) changeLines.push(`<li style="margin-bottom:6px">📅 <strong>New date/time:</strong> ${fmt(form.startDate)}${form.endDate && form.endDate !== form.startDate ? ` &ndash; ${fmt(form.endDate)}` : ""}${form.time ? ` at ${fmtTime(form.time)}` : ""}</li>`);
             if (locationChanged) changeLines.push(`<li style="margin-bottom:6px">📍 <strong>New location:</strong> ${form.location}${form.address ? `, ${form.address}` : ""}</li>`);
             for (const ticket of uniqueEmails) {
               try {
@@ -1939,7 +1944,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
                   body: JSON.stringify({
                     from: "New Harmony Life <tickets@newharmonylife.com>",
                     to: [ticket.buyer_email],
-                    subject: `Important update — ${form.title}`,
+                    subject: `Important update &mdash; ${form.title}`,
                     html: `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
   <div style="background:#1C2B1A;padding:28px 32px;text-align:center">
@@ -1977,7 +1982,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
           .order("created_at", { ascending: true });
 
         if (waitlistEntries && waitlistEntries.length > 0) {
-          // Email everyone on the waitlist — spots are first-come-first-served
+          // Email everyone on the waitlist &mdash; spots are first-come-first-served
           const rKey = localStorage.getItem("nh_resend_key");
           const toNotify = waitlistEntries; // all of them
           let emailsSent = 0;
@@ -1992,7 +1997,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
                   body: JSON.stringify({
                     from: "New Harmony Life <tickets@newharmonylife.com>",
                     to: [person.email],
-                    subject: `Spots just opened up — ${form.title}`,
+                    subject: `Spots just opened up &mdash; ${form.title}`,
                     html: `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
   <div style="background:#1C2B1A;padding:28px 32px;text-align:center">
@@ -2003,7 +2008,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     <h2 style="color:#1C2B1A;margin:0 0 8px">Great news, ${person.name?.split(" ")[0] || "there"}! 🎉</h2>
     <p style="color:#6B7280;margin:0 0 20px;line-height:1.6">
       <strong>${spotsOpened} new spot${spotsOpened !== 1 ? "s have" : " has"} opened up</strong> for <strong>${form.title}</strong>.
-      All ${toNotify.length} waitlisted ${toNotify.length !== 1 ? "people are" : "person is"} being notified at the same time — it's first come, first served, so grab your ticket soon!
+      All ${toNotify.length} waitlisted ${toNotify.length !== 1 ? "people are" : "person is"} being notified at the same time &mdash; it's first come, first served, so grab your ticket soon!
     </p>
     <div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:16px 20px;margin-bottom:20px">
       <div style="color:#166534;font-weight:700;font-size:0.9rem;margin-bottom:4px">📍 ${form.location}</div>
@@ -2022,10 +2027,10 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
                 console.warn(`Waitlist email failed for ${person.email}:`, emailErr);
               }
             }
-            showToast(`✉️ ${emailsSent} waitlist ${emailsSent !== 1 ? "emails" : "email"} sent — ${spotsOpened} new spot${spotsOpened !== 1 ? "s" : ""} opened!`);
+            showToast(`✉️ ${emailsSent} waitlist ${emailsSent !== 1 ? "emails" : "email"} sent &mdash; ${spotsOpened} new spot${spotsOpened !== 1 ? "s" : ""} opened!`);
           } else {
-            // No Resend key — tell the admin how many people to contact manually
-            showToast(`⚠️ ${spotsOpened} spot${spotsOpened !== 1 ? "s" : ""} opened — notify ${toNotify.length} waitlisted ${toNotify.length !== 1 ? "people" : "person"} manually (no Resend key set).`, "warn");
+            // No Resend key &mdash; tell the admin how many people to contact manually
+            showToast(`⚠️ ${spotsOpened} spot${spotsOpened !== 1 ? "s" : ""} opened &mdash; notify ${toNotify.length} waitlisted ${toNotify.length !== 1 ? "people" : "person"} manually (no Resend key set).`, "warn");
           }
         }
       }
@@ -2053,9 +2058,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       }
       showToast("Event published ✓");
     }
-    // Navigate immediately; reload data in the background
+    await loadEvents();
     setForm(EMPTY_EVENT_FORM); setEditingId(null); setView("discover");
-    loadEvents(); // fire-and-forget — no await needed here
   };
   const startEdit = ev => {
     setForm({
@@ -2111,7 +2115,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
   };
   const handleDelete = async (id) => {
     await supabase.from("events").delete().eq("id", id);
-    setEvents(prev => prev.filter(e => e.id !== id));
+    await loadEvents();
     showToast("Event removed.", "warn");
     setView("discover");
   };
@@ -2169,20 +2173,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       photos: vendorForm.photos || [], status: "pending",
       community_opt_in: vendorForm.communityOptIn || false,
     });
-    const newVendor = {
-      id: "v_" + Math.random().toString(36).slice(2, 9),
-      businessName: vendorForm.businessName, contactName: vendorForm.contactName,
-      email: vendorForm.email, phone: vendorForm.phone,
-      city: vendorForm.city, state: vendorForm.state,
-      vendorType: vendorForm.vendorType, description: vendorForm.description,
-      spaceNeeded: vendorForm.spaceNeeded, yearsInBusiness: vendorForm.yearsInBusiness,
-      hasPermit: vendorForm.hasPermit, electricNeeded: vendorForm.electricNeeded,
-      tentOwned: vendorForm.tentOwned, website: vendorForm.website,
-      instagram: vendorForm.instagram, comments: vendorForm.comments,
-      photo: vendorForm.photo || null, status: "pending",
-      communityOptIn: vendorForm.communityOptIn || false,
-    };
-    setEvents(prev => prev.map(e => e.id !== vendorModal ? e : { ...e, vendors: [...(e.vendors || []), newVendor] }));
+    await loadEvents();
     setVendorSubmitted(true);
     showToast("🌿 Application submitted!");
   };
@@ -2245,23 +2236,19 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
   };
   const updateVendorStatus = async (evId, vendorId, status) => {
     await supabase.from("vendors").update({ status }).eq("id", vendorId);
-    setEvents(prev => prev.map(e => e.id !== evId ? e : {
-      ...e,
-      vendors: e.vendors.map(v => v.id === vendorId ? { ...v, status } : v),
-    }));
+    await loadEvents();
   };
 
   // ─── FILTERED EVENTS ───────────────────────────────────────────────────────
-  const visibleEvents = useMemo(() => activeEvents.filter(ev => {
+  const visibleEvents = activeEvents.filter(ev => {
     // Private events are hidden from the public discover feed —
     // but admins with the dashboard unlocked can see everything
     if (ev.isPrivate === true && !dashUnlocked) return false;
     // Non-logged-in users only see public events
     if (!currentUser && ev.isPublic === false) return false;
     return true;
-  }), [activeEvents, dashUnlocked, currentUser]);
-
-  const filteredEvents = useMemo(() => visibleEvents.filter(ev => {
+  });
+  const filteredEvents = visibleEvents.filter(ev => {
     const q = search.toLowerCase();
     const ms = !search || [ev.title, ev.description, ev.location].some(s => s && s.toLowerCase().includes(q));
     const mc = filterCat === "All" || ev.category === filterCat;
@@ -2273,15 +2260,18 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     const mp = filterPrice === "all" ? true : filterPrice === "free" ? lowestPrice === 0 : lowestPrice > 0;
     const mv = filterVibe.length === 0 ? true : filterVibe.every(v => (ev.vibeTags || []).includes(v));
     return ms && mc && md && mp && mv;
-  }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "")),
-  [visibleEvents, search, filterCat, filterDate, filterPrice, filterVibe]);
+  }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
 
   // ─── LOADING SCREEN ────────────────────────────────────────────────────────
-  // NOTE: Loading UI is rendered in AppShell (via the `loading` context value)
-  // so that no hooks are called after an early return here.
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: "#F7F5F0", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "1rem" }}>
+      <div style={{ fontSize: "3rem" }}>🌿</div>
+      <div style={{ color: "#2D6A4F", fontFamily: "'Lora',serif", fontSize: "1.3rem", fontWeight: 700 }}>New Harmony Life</div>
+      <div style={{ color: "#6B7280", fontSize: "0.9rem" }}>Loading events…</div>
+    </div>
+  );
 
-  const value = useMemo(() => ({
-    loading,
+  const value = {
     currentUser, setCurrentUser,
     authModal, setAuthModal, authForm, setAuthForm, authErrors, setAuthErrors, authMode, setAuthMode,
     cart, setCart, cartOpen, setCartOpen, cartTotal, cartCount,
@@ -2326,24 +2316,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     categoryConfig, saveCategoryConfig,
     eventTypeConfig, saveEventTypeConfig,
     termsContent, saveTermsContent,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [
-    loading,
-    currentUser, authModal, authForm, authErrors, authMode,
-    cart, cartOpen, cartTotal, cartCount,
-    checkoutInfo, checkoutErrors, checkoutStep, paymentForm, paymentErrors,
-    orderComplete, payMethod, paypalLoaded, processing,
-    events, view, selectedId, search, filterCat, filterDate, filterPrice, filterVibe,
-    myTickets, toast, registerQty, selectedTierId,
-    calendarModal, vendorModal, vendorForm, vendorErrors, vendorSubmitted,
-    dashUnlocked, pwInput, pwError, resendApiKey,
-    form, formErrors, editingId, checkinModal,
-    selectedEvent, activeEvents, archivedEvents, filteredEvents,
-    reviews, qaItems, interests, following, swRegistered,
-    installPrompt, isInstalled, isOnline,
-    eventPhotos, badges, activityFeed, notifPrefs, referralStats,
-    customAnswers, vibeConfig, sortConfig, categoryConfig, eventTypeConfig, termsContent,
-  ]);
+  };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
@@ -2447,7 +2420,7 @@ function EventPhotoGallery({ eventId }) {
             <div style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.82rem", marginTop: "12px" }}>
               {photos[lightbox]?.caption && <div style={{ marginBottom: "4px" }}>{photos[lightbox].caption}</div>}
               <div>By {photos[lightbox]?.uploadedBy} · {photos[lightbox]?.uploadedAt ? new Date(photos[lightbox].uploadedAt).toLocaleDateString() : ""}</div>
-              <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", marginTop: "4px" }}>{lightbox + 1} / {photos.length} — click outside to close</div>
+              <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", marginTop: "4px" }}>{lightbox + 1} / {photos.length} &mdash; click outside to close</div>
             </div>
           </div>
           <button onClick={e => { e.stopPropagation(); setLightbox(l => (l < photos.length - 1 ? l + 1 : 0)); }}
@@ -2513,7 +2486,7 @@ function ActivityFeedPanel() {
 
   useEffect(() => {
     if (!loaded && events.length > 0) { loadActivityFeed().catch(() => {}); setLoaded(true); }
-  }, [events.length, loaded, loadActivityFeed]);
+  }, [events.length]);
 
   if (activityFeed.length === 0) return null;
 
@@ -2580,9 +2553,42 @@ function StarRating({ value, onChange, size = 22, readonly = false }) {
   );
 }
 
-// PWAInstallBanner was removed — install prompt is handled solely by the
-// inline banner in AppShell (driven by installPrompt context state), which
-// avoids registering a second competing beforeinstallprompt listener.
+// ─── PWA INSTALL BANNER ───────────────────────────────────────────────────────
+function PWAInstallBanner() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem("nh_pwa_dismissed") === "1");
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setDeferredPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => setInstalled(true));
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const install = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") setInstalled(true);
+    setDeferredPrompt(null);
+  };
+
+  if (!deferredPrompt || dismissed || installed) return null;
+  return (
+    <div style={{ position: "fixed", bottom: "1.5rem", left: "50%", transform: "translateX(-50%)", zIndex: 500, background: T.bgDeep, border: `1px solid ${T.green3}40`, borderRadius: "16px", padding: "14px 20px", display: "flex", alignItems: "center", gap: "14px", boxShadow: "0 8px 32px rgba(0,0,0,0.3)", maxWidth: "min(420px, 90vw)", width: "100%", animation: "slideUp 0.3s ease" }}>
+      <div style={{ fontSize: "2rem", flexShrink: 0 }}>🌿</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: "#fff", fontWeight: 700, fontSize: "0.88rem", marginBottom: "2px" }}>Install New Harmony Life</div>
+        <div style={{ color: T.green4, fontSize: "0.76rem" }}>Add to your home screen for quick access & offline browsing</div>
+      </div>
+      <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+        <button onClick={install} style={{ background: T.green1, color: "#fff", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.8rem", whiteSpace: "nowrap" }}>Install</button>
+        <button onClick={() => { setDismissed(true); localStorage.setItem("nh_pwa_dismissed", "1"); }} style={{ background: "rgba(255,255,255,0.1)", color: T.stoneL, border: "none", borderRadius: "8px", padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.8rem" }}>✕</button>
+      </div>
+    </div>
+  );
+}
 
 // ─── ADD TO CALENDAR DROPDOWN ─────────────────────────────────────────────────
 function AddToCalendar({ ev }) {
@@ -3018,7 +3024,7 @@ function VendorModal() {
                     </div>
                   ))}
                 </div>
-                {allAgreed && <div style={{ marginTop: "12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "10px 14px", color: T.green1, fontSize: "0.82rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>✅ All agreements accepted — you're ready to submit!</div>}
+                {allAgreed && <div style={{ marginTop: "12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "10px 14px", color: T.green1, fontSize: "0.82rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>✅ All agreements accepted &mdash; you're ready to submit!</div>}
               </div>
               <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", paddingBottom: "0.5rem" }}>
                 {!allAgreed && (
@@ -3070,7 +3076,7 @@ function CalendarEventModal() {
             {registered
               ? <div style={{ flex: 1, background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "13px", textAlign: "center", minWidth: "120px" }}><div style={{ color: T.green1, fontWeight: 700, fontSize: "0.9rem" }}>✅ You're registered!</div></div>
               : inCart
-              ? <button onClick={() => { setCalendarModal(null); setCartOpen(true); }} style={{ flex: 1, background: T.earth, color: "#fff", border: "none", borderRadius: "12px", padding: "13px", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minWidth: "120px" }}>In Cart — View Cart 🛒</button>
+              ? <button onClick={() => { setCalendarModal(null); setCartOpen(true); }} style={{ flex: 1, background: T.earth, color: "#fff", border: "none", borderRadius: "12px", padding: "13px", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minWidth: "120px" }}>In Cart &mdash; View Cart 🛒</button>
               : full
               ? <button disabled style={{ flex: 1, background: T.cream, color: T.stoneL, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "13px", fontSize: "0.9rem", cursor: "not-allowed", fontFamily: "inherit", minWidth: "120px" }}>Sold Out</button>
               : <button onClick={() => { const tier = ev.ticketTiers?.[0]; addToCart(ev, 1, tier); setCalendarModal(null); }} style={{ flex: 1, background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "13px", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minWidth: "120px" }}>{(ev.ticketTiers?.[0]?.price ?? 0) === 0 ? "Register Free 🌿" : "Add to Cart 🛒"}</button>
@@ -3102,7 +3108,7 @@ function PhotoCarousel({ photos, color }) {
 }
 
 // ─── TIER PICKER POPOVER ──────────────────────────────────────────────────────
-// Shown when "Add to Cart" is clicked on an EventCard — mirrors the detail view's
+// Shown when "Add to Cart" is clicked on an EventCard &mdash; mirrors the detail view's
 // tier selector layout so the experience is consistent.
 function TierPickerPopover({ ev, onClose }) {
   const { addToCart } = useApp();
@@ -3539,7 +3545,7 @@ function DiscoverView() {
   const showFreeBtn = sortConfig.enabled && sortConfig.items.some(i => i.group === "price" && i.id === "price-free");
   const activeFilterCount = (filterCat !== "All" ? 1 : 0) + (filterDate !== "all" ? 1 : 0) + (filterPrice !== "all" ? 1 : 0) + (filterFollowing ? 1 : 0) + filterVibe.length;
   const clearAll = () => { setSearch(""); setFilterCat("All"); setFilterDate("all"); setFilterPrice("all"); setFilterFollowing(false); setFilterVibe([]); };
-  const displayEvents = filterFollowing ? filteredEvents.filter(ev => following.includes(ev.organizer)) : filteredEvents;
+  const displayEvents = filterFollowing ? filteredEvents.filter(ev => following.has(ev.organizer)) : filteredEvents;
   return (
     <div style={{ minHeight: "100vh", background: T.bg }}>
       <div style={{ background: `linear-gradient(160deg,${T.bgDeep} 0%,${T.bgMid} 100%)`, padding: "4rem 2rem 3rem", textAlign: "center", position: "relative", overflow: "hidden" }}>
@@ -3547,7 +3553,7 @@ function DiscoverView() {
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: `${T.green3}20`, border: `1px solid ${T.green3}40`, borderRadius: "100px", padding: "6px 18px", fontSize: "0.8rem", color: T.green4, fontWeight: 600, marginBottom: "1.5rem", letterSpacing: "0.06em" }}><span>🌱</span> COMMUNITY · NATURE · CELEBRATION</div>
           <h1 style={{ color: "#fff", fontFamily: "'Lora',serif", fontSize: "clamp(2rem,5vw,3.2rem)", fontWeight: 700, margin: "0 0 1rem", letterSpacing: "-0.02em", lineHeight: 1.15 }}>Gather. Grow.<br /><span style={{ background: `linear-gradient(135deg,${T.green3},${T.earthL})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Belong Together.</span></h1>
-          <p style={{ color: "#9CA3AF", fontSize: "1.05rem", maxWidth: "480px", margin: "0 auto 2.5rem", lineHeight: 1.7 }}>Discover events rooted in community, nature, and shared joy — right here in the heartland.</p>
+          <p style={{ color: "#9CA3AF", fontSize: "1.05rem", maxWidth: "480px", margin: "0 auto 2.5rem", lineHeight: 1.7 }}>Discover events rooted in community, nature, and shared joy &mdash; right here in the heartland.</p>
           <div style={{ maxWidth: "540px", margin: "0 auto", position: "relative" }}>
             <span style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)", fontSize: "1rem", pointerEvents: "none", zIndex: 1 }}>🔍</span>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search events, venues, topics..." style={{ width: "100%", padding: "14px 44px 14px 46px", background: "rgba(255,255,255,0.12)", border: `1px solid ${T.green3}40`, borderRadius: "14px", color: "#fff", fontSize: "0.9rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
@@ -3571,7 +3577,7 @@ function DiscoverView() {
             <div style={{ position: "absolute", right: 0, top: 0, bottom: "4px", width: "40px", background: `linear-gradient(to right, transparent, ${T.bg})`, pointerEvents: "none" }} />
           </div>
         )}
-        {(sortConfig.enabled || following.length > 0) && (
+        {(sortConfig.enabled || following.size > 0) && (
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
             {sortConfig.enabled && activeDateItems.map(item => {
               const label = item.label.toLowerCase();
@@ -3579,7 +3585,7 @@ function DiscoverView() {
               return <button key={item.id} onClick={() => setFilterDate(filterDate === val ? "all" : val)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterDate === val ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterDate === val ? `${T.earthL}30` : "transparent", color: filterDate === val ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>{item.label}</button>;
             })}
             {sortConfig.enabled && showFreeBtn && <button onClick={() => setFilterPrice(filterPrice === "free" ? "all" : "free")} style={{ padding: "6px 14px", borderRadius: "100px", border: filterPrice === "free" ? `1px solid ${T.green2}` : `1px solid ${T.border}`, background: filterPrice === "free" ? T.green5 : "transparent", color: filterPrice === "free" ? T.green1 : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🎁 Free</button>}
-            {following.length > 0 && <button onClick={() => setFilterFollowing(f => !f)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterFollowing ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterFollowing ? `${T.earth}18` : "transparent", color: filterFollowing ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🔔 Following</button>}
+            {following.size > 0 && <button onClick={() => setFilterFollowing(f => !f)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterFollowing ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterFollowing ? `${T.earth}18` : "transparent", color: filterFollowing ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🔔 Following</button>}
           </div>
         )}
       </div>
@@ -3699,7 +3705,7 @@ function ReviewsSection({ ev }) {
       )}
 
       {evReviews.length === 0
-        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "2rem 0" }}>No reviews yet — be the first to share your experience!</div>
+        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "2rem 0" }}>No reviews yet &mdash; be the first to share your experience!</div>
         : <div style={{ display: "grid", gap: "12px" }}>
             {evReviews.map(r => (
               <div key={r.id} style={{ background: T.cream, borderRadius: "12px", padding: "14px 16px", border: `1px solid ${T.border}` }}>
@@ -3778,7 +3784,7 @@ function QASection({ ev }) {
       </div>
 
       {evQA.length === 0
-        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "1.5rem 0" }}>No questions yet — ask away!</div>
+        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "1.5rem 0" }}>No questions yet &mdash; ask away!</div>
         : <div style={{ display: "grid", gap: "12px" }}>
             {[...unanswered, ...answered].map(q => (
               <div key={q.id} style={{ background: T.cream, borderRadius: "12px", padding: "14px 16px", border: `1px solid ${T.border}` }}>
@@ -3845,7 +3851,7 @@ function DetailView() {
           <h2 style={{ color: T.text, fontFamily: "'Lora',serif", margin: "0 0 0.5rem" }}>Private Event</h2>
           {ev.privatePassword ? (
             <>
-              <p style={{ color: T.textSoft, marginBottom: "1.5rem", fontSize: "0.9rem" }}>This event requires a password — or an invite link from the organizer.</p>
+              <p style={{ color: T.textSoft, marginBottom: "1.5rem", fontSize: "0.9rem" }}>This event requires a password &mdash; or an invite link from the organizer.</p>
               <PasswordInput
                 value={privateInput}
                 onChange={e => { setPrivateInput(e.target.value); setPrivateError(false); }}
@@ -3906,7 +3912,7 @@ function DetailView() {
             const intr = getInterest(ev.id);
             const isGoing = currentUser && intr.going.includes(currentUser.id);
             const isInterested = currentUser && intr.interested.includes(currentUser.id);
-            const isFollowing = following.includes(ev.organizer);
+            const isFollowing = following.has(ev.organizer);
             return (
               <div style={{ display: "flex", gap: "8px", marginBottom: "1.5rem", flexWrap: "wrap", alignItems: "center" }}>
                 {currentUser && (
@@ -3934,7 +3940,7 @@ function DetailView() {
             );
           })()}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: "14px", marginBottom: "2rem" }}>
-            {[["📅 Dates & Time", multiDay(ev) ? `${fmt(ev.startDate)} –\n${fmt(ev.endDate)}\n${fmtTime(ev.time)} – ${fmtTime(ev.endTime)}` : `${fmt(ev.startDate)}\n${fmtTime(ev.time)} – ${fmtTime(ev.endTime)}`], ["📍 Location", ev.online ? "Online Event" : `${ev.location}${ev.address ? "\n" + ev.address : ""}`], ["👤 Organizer", ev.organizer]].map(([label, val]) => (
+            {[["📅 Dates & Time", multiDay(ev) ? `${fmt(ev.startDate)} &ndash;\n${fmt(ev.endDate)}\n${fmtTime(ev.time)} &ndash; ${fmtTime(ev.endTime)}` : `${fmt(ev.startDate)}\n${fmtTime(ev.time)} &ndash; ${fmtTime(ev.endTime)}`], ["📍 Location", ev.online ? "Online Event" : `${ev.location}${ev.address ? "\n" + ev.address : ""}`], ["👤 Organizer", ev.organizer]].map(([label, val]) => (
               <div key={label} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "14px" }}>
                 <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
                 <div style={{ color: T.textMid, fontSize: "0.875rem", whiteSpace: "pre-line", lineHeight: 1.5 }}>{val}</div>
@@ -4238,7 +4244,7 @@ function PaymentStep() {
     if (!window.paypal) return;
     window.paypal.Buttons({
       style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal", height: 48 },
-      createOrder: (data, actions) => actions.order.create({ purchase_units: [{ amount: { value: cartTotal.toFixed(2), currency_code: "USD" }, description: "New Harmony Life — Event Tickets" }] }),
+      createOrder: (data, actions) => actions.order.create({ purchase_units: [{ amount: { value: cartTotal.toFixed(2), currency_code: "USD" }, description: "New Harmony Life &mdash; Event Tickets" }] }),
       onApprove: (data, actions) => actions.order.capture().then(() => {
         setProcessing(true);
         setTimeout(() => {
@@ -4271,7 +4277,7 @@ function PaymentStep() {
           setCart([]); setCheckoutStep(3); setProcessing(false);
         }, 1200);
       }),
-      onError: err => { console.error("PayPal error", err); showToast("PayPal error — please try again", "warn"); },
+      onError: err => { console.error("PayPal error", err); showToast("PayPal error &mdash; please try again", "warn"); },
     }).render(container);
     setPpRendered(true);
   };
@@ -4447,7 +4453,7 @@ function CheckoutView() {
                     <h2 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.25rem", margin: "0 0 1rem" }}>Confirm Registration</h2>
                     <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "16px", marginBottom: "1.5rem" }}>
                       <div style={{ color: T.green1, fontWeight: 700, marginBottom: "4px" }}>🎉 All tickets in your cart are free!</div>
-                      <div style={{ color: T.textSoft, fontSize: "0.85rem" }}>No payment needed — click below to confirm your registration.</div>
+                      <div style={{ color: T.textSoft, fontSize: "0.85rem" }}>No payment needed &mdash; click below to confirm your registration.</div>
                     </div>
                     <div style={{ display: "flex", gap: "10px" }}>
                       <button onClick={() => setCheckoutStep(1)} style={{ background: T.green5, color: T.textSoft, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "12px 20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>← Back</button>
@@ -4524,14 +4530,14 @@ function CreateView() {
   const { form, setForm, formErrors, editingId, setEditingId, setView, handleSave, handlePhotoAdd, removePhoto, fileRef, dashUnlocked, categoryConfig, vibeConfig, eventTypeConfig } = useApp();
   const hasChanges = form.title.trim() || form.description.trim() || form.location.trim();
 
-  // Warn on browser back/close too — must be before any early returns
+  // Warn on browser back/close too &mdash; must be before any early returns
   useEffect(() => {
     const handler = (e) => { if (hasChanges) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasChanges]);
 
-  // Access guard — only admins can create/edit events
+  // Access guard &mdash; only admins can create/edit events
   if (!dashUnlocked) {
     return (
       <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
@@ -4656,7 +4662,7 @@ function CreateView() {
           </section>
           <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px" }}>
             <h3 style={{ color: T.green1, margin: "0 0 4px", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Tickets & Capacity</h3>
-            <p style={{ color: T.textSoft, fontSize: "0.8rem", margin: "0 0 20px", lineHeight: 1.5 }}>Set one total capacity for the event — this is the maximum number of attendees across all ticket types combined. Then add one or more pricing tiers (e.g. Early Bird, General, VIP).</p>
+            <p style={{ color: T.textSoft, fontSize: "0.8rem", margin: "0 0 20px", lineHeight: 1.5 }}>Set one total capacity for the event &mdash; this is the maximum number of attendees across all ticket types combined. Then add one or more pricing tiers (e.g. Early Bird, General, VIP).</p>
             <div style={{ display: "grid", gap: "16px" }}>
 
               {/* ── Single total capacity ── */}
@@ -4678,7 +4684,7 @@ function CreateView() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
                   <div>
                     <label style={{ color: T.textSoft, fontSize: "0.82rem", fontWeight: 600 }}>Pricing Tiers</label>
-                    <div style={{ color: T.stoneL, fontSize: "0.74rem", marginTop: "1px" }}>Each tier shares the total capacity above — any mix of ticket types can be sold up to that limit.</div>
+                    <div style={{ color: T.stoneL, fontSize: "0.74rem", marginTop: "1px" }}>Each tier shares the total capacity above &mdash; any mix of ticket types can be sold up to that limit.</div>
                   </div>
                   <button type="button" onClick={() => setForm(f => ({ ...f, ticketTiers: [...(f.ticketTiers || []), { id: "t" + Date.now(), name: "", price: 0, capacity: parseInt(f.capacity) || 50, sold: 0, description: "" }] }))} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "5px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem", flexShrink: 0, marginLeft: "12px" }}>+ Add Tier</button>
                 </div>
@@ -4825,7 +4831,7 @@ function CreateView() {
             <p style={{ color: T.textSoft, fontSize: "0.83rem", margin: "0 0 16px", lineHeight: 1.55 }}>Choose what happens when an attendee cancels their ticket.</p>
             <div style={{ display: "grid", gap: "10px" }}>
               {[
-                { value: "none", emoji: "☀️", label: "Rain or Shine — No Refunds", desc: "All sales are final. No refunds under any circumstances." },
+                { value: "none", emoji: "☀️", label: "Rain or Shine &mdash; No Refunds", desc: "All sales are final. No refunds under any circumstances." },
                 { value: "partial", emoji: "♻️", label: "Partial Refund Window", desc: "Refunds allowed up to a set number of days before the event." },
                 { value: "full", emoji: "✅", label: "Full Refund Window", desc: "Full refund allowed up to a set number of days before the event." },
               ].map(opt => (
@@ -4844,7 +4850,7 @@ function CreateView() {
             </div>
             {(form.refundPolicy === "partial" || form.refundPolicy === "full") && (
               <div style={{ marginTop: "14px", paddingTop: "14px", borderTop: `1px solid ${T.border}` }}>
-                <Field label="Refund window — days before event">
+                <Field label="Refund window &mdash; days before event">
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                     <input type="number" min="1" max="90" value={form.refundDeadlineDays} onChange={e => setForm({ ...form, refundDeadlineDays: Math.max(1, parseInt(e.target.value) || 1) })} style={{ ...inp(), width: "90px" }} />
                     <span style={{ color: T.textSoft, fontSize: "0.85rem" }}>days before the event start date</span>
@@ -4932,9 +4938,9 @@ function CreateView() {
               <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <Field label="Repeat Pattern">
                   <select value={form.recurringType || "weekly"} onChange={e => setForm({ ...form, recurringType: e.target.value })} style={inp()}>
-                    <option value="weekly">Weekly — same day each week</option>
-                    <option value="monthly-date">Monthly — same date each month (e.g. 15th)</option>
-                    <option value="monthly-position">Monthly — same position (e.g. 3rd Friday)</option>
+                    <option value="weekly">Weekly &mdash; same day each week</option>
+                    <option value="monthly-date">Monthly &mdash; same date each month (e.g. 15th)</option>
+                    <option value="monthly-position">Monthly &mdash; same position (e.g. 3rd Friday)</option>
                   </select>
                 </Field>
                 {form.recurringType === "weekly" && (
@@ -5231,22 +5237,22 @@ function MyTicketsView() {
                 const inWindow = daysUntil >= days;
                 if (cancelConfirm.total === 0) return (
                   <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "1.25rem", fontSize: "0.83rem", color: T.green1, textAlign: "center" }}>
-                    🎟️ Free ticket — no refund needed. Registration will be removed.
+                    🎟️ Free ticket &mdash; no refund needed. Registration will be removed.
                   </div>
                 );
                 if (policy === "none") return (
                   <div style={{ background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: "10px", padding: "12px 14px", marginBottom: "1.25rem", fontSize: "0.83rem", color: "#92400E", textAlign: "center" }}>
-                    ☀️ <strong>Rain or Shine — No Refunds.</strong> This ticket is non-refundable per event policy.
+                    ☀️ <strong>Rain or Shine &mdash; No Refunds.</strong> This ticket is non-refundable per event policy.
                   </div>
                 );
                 if (policy === "full") return (
                   <div style={{ background: inWindow ? T.green5 : "#FEF3C7", border: `1px solid ${inWindow ? T.green3 : "#FDE68A"}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "1.25rem", fontSize: "0.83rem", color: inWindow ? T.green1 : "#92400E", textAlign: "center" }}>
-                    {inWindow ? `✅ Full refund eligible — more than ${days} days until the event.` : `⏰ Refund window closed — less than ${days} days until the event.`}
+                    {inWindow ? `✅ Full refund eligible &mdash; more than ${days} days until the event.` : `⏰ Refund window closed &mdash; less than ${days} days until the event.`}
                   </div>
                 );
                 if (policy === "partial") return (
                   <div style={{ background: inWindow ? T.green5 : "#FEF3C7", border: `1px solid ${inWindow ? T.green3 : "#FDE68A"}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "1.25rem", fontSize: "0.83rem", color: inWindow ? T.green1 : "#92400E", textAlign: "center" }}>
-                    {inWindow ? `♻️ Partial refund eligible — more than ${days} days until the event.` : `⏰ Refund window closed — less than ${days} days until the event.`}
+                    {inWindow ? `♻️ Partial refund eligible &mdash; more than ${days} days until the event.` : `⏰ Refund window closed &mdash; less than ${days} days until the event.`}
                   </div>
                 );
               })()}
@@ -5288,11 +5294,11 @@ function MyTicketsView() {
                         {ev && <div style={{ color: T.textSoft, fontSize: "0.8rem" }}>📍 {ev.location}</div>}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-                        {/* Confirmed badge — always green */}
+                        {/* Confirmed badge &mdash; always green */}
                         <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "6px", padding: "3px 10px", color: T.green1, fontSize: "0.72rem", fontWeight: 700 }}>
                           ✓ CONFIRMED
                         </div>
-                        {/* Check-in badge — red if not checked in, green if checked in */}
+                        {/* Check-in badge &mdash; red if not checked in, green if checked in */}
                         <div style={{ background: ticket.checkedIn ? T.green1 : "#FEE2E2", border: `1px solid ${ticket.checkedIn ? T.green2 : "#FECACA"}`, borderRadius: "6px", padding: "3px 10px", color: ticket.checkedIn ? "#fff" : T.warn, fontSize: "0.72rem", fontWeight: 700 }}>
                           {ticket.checkedIn ? `✔ Checked In${ticket.checkinTime ? "  ·  " + ticket.checkinTime : ""}` : "✗ Not Checked In"}
                         </div>
@@ -5301,7 +5307,7 @@ function MyTicketsView() {
                     </div>
                   </div>
 
-                  {/* QR code + details — always visible */}
+                  {/* QR code + details &mdash; always visible */}
                   <div style={{ borderTop: `1px dashed ${T.border}`, padding: "20px 24px", background: T.cream, display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start" }}>
                     {/* QR Code */}
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
@@ -5952,7 +5958,7 @@ function DashSettingsPanel() {
         <StatusBadge on={sortEnabled} />
 
         <div style={{ marginBottom: "10px" }}>
-          {sortItems.length === 0 && <div style={{ color: T.stoneL, fontSize: "0.82rem", padding: "12px", textAlign: "center", background: T.cream, borderRadius: "10px", border: `1px solid ${T.border}`, marginBottom: "6px" }}>No buttons yet — add one below</div>}
+          {sortItems.length === 0 && <div style={{ color: T.stoneL, fontSize: "0.82rem", padding: "12px", textAlign: "center", background: T.cream, borderRadius: "10px", border: `1px solid ${T.border}`, marginBottom: "6px" }}>No buttons yet &mdash; add one below</div>}
           {sortItems.map((si, idx) => (
             <div key={si.id} style={rowStyle}>
               <div style={{ display: "flex", flexDirection: "column", gap: "1px", flexShrink: 0 }}>
@@ -6768,7 +6774,7 @@ function AdminDetailView() {
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView() {
-  const { events, setEvents, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig } = useApp();
+  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig } = useApp();
   const [dashTab, setDashTab] = useState("events");
   const [archiveSearch, setArchiveSearch] = useState("");
   const [checkinSearch, setCheckinSearch] = useState("");
@@ -6955,8 +6961,8 @@ function DashboardView() {
                       } else {
                         const token = Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,10);
                         await supabase.from("events").update({ invite_token: token }).eq("id", ev.id);
-                        setEvents(prev => prev.map(e => e.id === ev.id ? { ...e, inviteToken: token } : e));
-                        showToast("Invite link generated — click again to copy! 🔗");
+                        await loadEvents();
+                        showToast("Invite link generated &mdash; click again to copy! 🔗");
                       }
                     }} style={{ background: `${T.earth}12`, color: T.earth, border: `1px solid ${T.earthL}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>
                       🔗 {ev.inviteToken ? "Invite Link" : "Generate Link"}
@@ -6983,7 +6989,7 @@ function DashboardView() {
             <div style={{ marginBottom: "1.5rem" }}>
               <label style={{ color: T.textSoft, fontSize: "0.82rem", fontWeight: 600, display: "block", marginBottom: "6px" }}>Select event to check in attendees</label>
               <select value={checkinEvId || ""} onChange={e => { setCheckinEvId(e.target.value || null); setCheckinSearch(""); }} style={{ padding: "10px 14px", borderRadius: "10px", border: `1px solid ${T.border}`, fontFamily: "inherit", fontSize: "0.9rem", background: T.bgCard, color: T.text, width: "100%", maxWidth: "460px" }}>
-                <option value="">— Choose an event —</option>
+                <option value="">&mdash; Choose an event &mdash;</option>
                 {dashActiveEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.title} ({ev.startDate})</option>)}
               </select>
             </div>
@@ -7412,7 +7418,7 @@ function SavedView() {
   const uid = currentUser.id;
   const goingEvents = events.filter(ev => (getInterest(ev.id).going || []).includes(uid));
   const interestedEvents = events.filter(ev => (getInterest(ev.id).interested || []).includes(uid));
-  const followedEvents = events.filter(ev => following.includes(ev.organizer));
+  const followedEvents = events.filter(ev => following.has(ev.organizer));
 
   const EventPill = ({ ev }) => (
     <div onClick={() => { setSelectedId(ev.id); setView("detail"); }}
@@ -7446,11 +7452,11 @@ function SavedView() {
       <h2 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.75rem", margin: "0 0 0.5rem" }}>🔖 Saved &amp; Following</h2>
       <p style={{ color: T.textSoft, fontSize: "0.9rem", marginBottom: "2rem" }}>Events you're tracking and organizers you follow.</p>
       <Section emoji="✅" title="Going" items={goingEvents} empty="No events marked as going yet" />
-      <Section emoji="❤️" title="Interested" items={interestedEvents} empty="No events marked as interested yet — browse events and tap ⭐ Interested" />
-      <Section emoji="🔔" title="Events from Followed Organizers" items={followedEvents} empty={following.length === 0 ? "Follow organizers from any event page to see their events here" : "No upcoming events from organizers you follow"} />
-      {following.length > 0 && (
+      <Section emoji="❤️" title="Interested" items={interestedEvents} empty="No events marked as interested yet &mdash; browse events and tap ⭐ Interested" />
+      <Section emoji="🔔" title="Events from Followed Organizers" items={followedEvents} empty={following.size === 0 ? "Follow organizers from any event page to see their events here" : "No upcoming events from organizers you follow"} />
+      {following.size > 0 && (
         <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "14px", padding: "18px" }}>
-          <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1rem", margin: "0 0 12px" }}>🔔 Following ({following.length})</h3>
+          <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1rem", margin: "0 0 12px" }}>🔔 Following ({following.size})</h3>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
             {[...following].map(org => (
               <div key={org} style={{ background: T.green5, color: T.green1, borderRadius: "100px", padding: "6px 14px", fontSize: "0.82rem", fontWeight: 600 }}>
@@ -7471,7 +7477,7 @@ function MobileBottomNav() {
   // Count user's saves
   const uid = currentUser?.id;
   const savedCount = uid
-    ? Object.values(interests).filter(i => i.going?.includes(uid) || i.interested?.includes(uid)).length + following.length
+    ? Object.values(interests).filter(i => i.going?.includes(uid) || i.interested?.includes(uid)).length + following.size
     : 0;
 
   const navItems = [
@@ -7848,7 +7854,7 @@ function MemoryReel({ eventId }) {
   if (photos.length < 2) return null;
 
   const handleShare = async () => {
-    const text = `📷 Memories from ${ev?.title || "the event"} — ${photos.length} photos from our community!`;
+    const text = `📷 Memories from ${ev?.title || "the event"} &mdash; ${photos.length} photos from our community!`;
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch {}
   };
 
@@ -7942,7 +7948,7 @@ function Footer() {
           <div style={{ color: T.stoneL, fontSize: "0.82rem", marginBottom: "6px" }}>📍 Castana, IA</div>
           <div style={{ color: T.stoneL, fontSize: "0.82rem" }}>🌱 Loess Hills Region</div>
         </div>
-        {/* Admin — only visible to logged-in users */}
+        {/* Admin &mdash; only visible to logged-in users */}
         {currentUser && (
           <div>
             <div style={{ color: T.green4, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "10px" }}>Admin</div>
@@ -7966,18 +7972,8 @@ function Footer() {
 
 // ─── APP SHELL ────────────────────────────────────────────────────────────────
 function AppShell() {
-  const { view, currentUser, installPrompt, setInstallPrompt, isInstalled, isOnline, setView, openAuth, dashUnlocked, loading } = useApp();
-  const [showInstallBanner, setShowInstallBanner] = useState(
-    () => localStorage.getItem("nh_pwa_dismissed") !== "1"
-  );
-
-  if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#F7F5F0", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "1rem" }}>
-      <div style={{ fontSize: "3rem" }}>🌿</div>
-      <div style={{ color: "#2D6A4F", fontFamily: "'Lora',serif", fontSize: "1.3rem", fontWeight: 700 }}>New Harmony Life</div>
-      <div style={{ color: "#6B7280", fontSize: "0.9rem" }}>Loading events…</div>
-    </div>
-  );
+  const { view, currentUser, installPrompt, setInstallPrompt, isInstalled, isOnline, setView, openAuth, dashUnlocked } = useApp();
+  const [showInstallBanner, setShowInstallBanner] = useState(true);
 
   const handleInstall = async () => {
     if (!installPrompt) return;
@@ -7986,19 +7982,14 @@ function AppShell() {
     if (outcome === "accepted") { setInstallPrompt(null); setShowInstallBanner(false); }
   };
 
-  const dismissInstallBanner = () => {
-    setShowInstallBanner(false);
-    localStorage.setItem("nh_pwa_dismissed", "1");
-  };
-
   const mobileHidden = ["checkout", "dashlogin", "dashboard", "create", "dayofmode", "admindetail"].includes(view);
 
   return (
-    <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", background: T.bg, minHeight: "100vh", paddingBottom: mobileHidden ? "0" : "env(safe-area-inset-bottom, 0px)" }}>
+    <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", background: T.bg, minHeight: "100vh", paddingBottom: mobileHidden ? "0" : "0" }}>
       {/* Offline indicator */}
       {!isOnline && (
         <div style={{ background: "#DC2626", color: "#fff", textAlign: "center", padding: "8px", fontSize: "0.82rem", fontWeight: 600, position: "sticky", top: 0, zIndex: 300 }}>
-          📡 You're offline — showing cached data
+          📡 You're offline &mdash; showing cached data
         </div>
       )}
       {/* PWA Install Banner */}
@@ -8013,17 +8004,18 @@ function AppShell() {
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={handleInstall} style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "8px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem" }}>Install App</button>
-            <button onClick={dismissInstallBanner} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: T.stoneL, borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem" }}>Not now</button>
+            <button onClick={() => setShowInstallBanner(false)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: T.stoneL, borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem" }}>Not now</button>
           </div>
         </div>
       )}
       <Navbar />
+      {currentUser && view !== "dashlogin" && (
         <div style={{ background: `linear-gradient(90deg,${T.bgMid},${T.bgDeep})`, borderBottom: `1px solid rgba(116,198,157,0.15)`, padding: "9px 2rem", display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: "26px", height: "26px", borderRadius: "50%", background: (currentUser.avatarColor || currentUser.avatar_color || "#40916C"), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 700, flexShrink: 0 }}>{initials(currentUser)}</div>
           <span style={{ color: T.green4, fontSize: "0.875rem" }}>
             Hello, <strong style={{ color: "#fff", fontFamily: "'Lora',serif" }}>{currentUser.firstName || currentUser.first_name || ""}!</strong>{" "}
             <span style={{ color: T.stoneL, fontSize: "0.78rem", fontWeight: 400 }}>
-              {view === "discover" && "Welcome back — what's happening near you?"}
+              {view === "discover" && "Welcome back &mdash; what's happening near you?"}
               {view === "detail" && "Viewing event details"}
               {view === "create" && "Creating a new event"}
               {view === "mytickets" && "Your account & registered events"}
@@ -8034,7 +8026,7 @@ function AppShell() {
           </span>
         </div>
       )}
-      {/* Main content — add bottom padding on mobile so bottom nav doesn't cover content */}
+      {/* Main content &mdash; add bottom padding on mobile so bottom nav doesn't cover content */}
       <div style={{ paddingBottom: mobileHidden ? "0" : "env(safe-area-inset-bottom, 0)" }}>
         {view === "discover" && <DiscoverView />}
         {view === "vendors" && <VendorDirectoryView />}
@@ -8054,6 +8046,7 @@ function AppShell() {
       <CalendarEventModal />
       <AuthModal />
       <Toast />
+      <PWAInstallBanner />
       {/* Mobile bottom navigation */}
       {!mobileHidden && <MobileBottomNav />}
     </div>
@@ -8077,7 +8070,7 @@ export default function App() {
         ::-webkit-scrollbar{width:6px;height:6px;}
         ::-webkit-scrollbar-track{background:#F0F0EA;}
         ::-webkit-scrollbar-thumb{background:#74C69D;border-radius:3px;}
-        /* Mobile bottom nav — only visible on small screens */
+        /* Mobile bottom nav &mdash; only visible on small screens */
         .mobile-bottom-nav { display: none !important; }
         .mobile-nav-spacer { display: none !important; }
         .mobile-only { display: none !important; }
