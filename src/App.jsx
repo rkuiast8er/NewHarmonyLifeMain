@@ -3918,37 +3918,148 @@ function DetailView() {
 
         </div>
 
-        {/* Sticky sidebar &mdash; ticket tiers + waitlist */}
+        {/* Sticky sidebar — ticket tiers + waitlist */}
         <div style={{ flex: "0 0 300px", background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px", position: "sticky", top: "80px", boxShadow: `0 4px 24px rgba(44,106,79,0.1)` }}>
-          {/* Tier selector */}
-          {!registered && (
-            <div style={{ marginBottom: "18px" }}>
-              <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Select Ticket Type</div>
-              <div style={{ display: "grid", gap: "8px" }}>
-                {tiers.map(tier => {
-                  const isSel = activeTierId === tier.id;
-                  const evFull = spotsLeft(ev) === 0;
-                  return (
-                    <div key={tier.id} onClick={() => { if (!evFull) { setSelectedTierId(tier.id); setRegQty(1); } }}
-                      style={{ border: `2px solid ${isSel ? T.green2 : T.border}`, borderRadius: "12px", padding: "11px 14px", cursor: evFull ? "default" : "pointer", background: isSel ? `${T.green1}0A` : evFull ? T.bg : "#fff", opacity: evFull ? 0.55 : 1, transition: "all 0.15s" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            {isSel && !evFull && <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: T.green2 }} />}
-                            <span style={{ color: T.text, fontWeight: 700, fontSize: "0.88rem" }}>{tier.name}</span>
+
+          {/* ── TIER SELECTOR / QTY PICKERS ── */}
+          {!registered && !full && (() => {
+            const multiTier = tiers.length > 1;
+            if (multiTier) {
+              // Multi-tier: per-tier quantity steppers
+              // Use local state via a small inner component trick — track qtys in selectedTierId-keyed object
+              // We'll repurpose the existing selectedTierId state as a JSON map for multi-tier
+              let tierQtys = {};
+              try { tierQtys = selectedTierId && selectedTierId.startsWith("{") ? JSON.parse(selectedTierId) : {}; } catch { tierQtys = {}; }
+              const setTierQty = (tierId, delta) => {
+                const tier = tiers.find(t => t.id === tierId);
+                const avail = Math.max(0, (tier?.capacity || 0) - (tier?.sold || 0));
+                const cur = tierQtys[tierId] || 0;
+                const next = Math.min(avail, Math.max(0, cur + delta));
+                const updated = { ...tierQtys, [tierId]: next };
+                if (next === 0) delete updated[tierId];
+                setSelectedTierId(JSON.stringify(updated));
+              };
+              const totalQty = Object.values(tierQtys).reduce((s, q) => s + q, 0);
+              const cartTotal = tiers.reduce((s, tier) => s + (tier.price * (tierQtys[tier.id] || 0)), 0);
+              const anyInCart = tiers.some(tier => isInCart(ev.id, tier.id));
+
+              return (
+                <div style={{ marginBottom: "18px" }}>
+                  <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Select Tickets</div>
+                  <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
+                    {tiers.map(tier => {
+                      const avail = Math.max(0, (tier.capacity || 0) - (tier.sold || 0));
+                      const tierFull = avail === 0;
+                      const qty = tierQtys[tier.id] || 0;
+                      const inCart = isInCart(ev.id, tier.id);
+                      return (
+                        <div key={tier.id} style={{ border: `2px solid ${qty > 0 ? T.green2 : inCart ? T.earth : T.border}`, borderRadius: "12px", padding: "12px 14px", background: qty > 0 ? `${T.green1}08` : inCart ? `${T.earth}08` : "#fff", opacity: tierFull ? 0.55 : 1, transition: "all 0.15s" }}>
+                          {/* Tier name + price row */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: tier.description ? "4px" : "10px" }}>
+                            <div>
+                              <span style={{ color: T.text, fontWeight: 700, fontSize: "0.88rem" }}>{tier.name}</span>
+                              {tierFull && <span style={{ marginLeft: "8px", background: "#FEE2E2", color: T.warn, borderRadius: "4px", padding: "1px 6px", fontSize: "0.65rem", fontWeight: 700 }}>SOLD OUT</span>}
+                              {!tierFull && avail <= 5 && <span style={{ marginLeft: "8px", background: "#FEF3C7", color: "#92400E", borderRadius: "4px", padding: "1px 6px", fontSize: "0.65rem", fontWeight: 700 }}>Only {avail} left</span>}
+                            </div>
+                            <div style={{ color: tier.price === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "1rem", fontFamily: "'Lora',serif", flexShrink: 0, marginLeft: "8px" }}>
+                              {tier.price === 0 ? "Free" : `$${tier.price}`}
+                            </div>
                           </div>
-                          {tier.description && <div style={{ color: T.textSoft, fontSize: "0.73rem", marginTop: "1px" }}>{tier.description}</div>}
+                          {tier.description && <div style={{ color: T.textSoft, fontSize: "0.73rem", marginBottom: "10px" }}>{tier.description}</div>}
+                          {/* Qty stepper or in-cart indicator */}
+                          {inCart ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ background: `${T.earth}18`, color: T.earth, borderRadius: "7px", padding: "5px 12px", fontSize: "0.78rem", fontWeight: 700 }}>✓ In cart</span>
+                              <button onClick={() => setCartOpen(true)} style={{ background: "none", border: "none", color: T.earth, cursor: "pointer", fontFamily: "inherit", fontSize: "0.75rem", textDecoration: "underline" }}>View cart</button>
+                            </div>
+                          ) : tierFull ? null : (
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              <button onClick={() => setTierQty(tier.id, -1)} disabled={qty === 0}
+                                style={{ width: "30px", height: "30px", borderRadius: "7px", background: qty === 0 ? "#F3F4F6" : T.green5, border: `1px solid ${qty === 0 ? T.border : T.green3}`, color: qty === 0 ? T.stoneL : T.green1, cursor: qty === 0 ? "default" : "pointer", fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>−</button>
+                              <span style={{ color: qty > 0 ? T.green1 : T.stoneL, fontWeight: 700, fontSize: "1rem", minWidth: "20px", textAlign: "center" }}>{qty}</span>
+                              <button onClick={() => setTierQty(tier.id, 1)} disabled={qty >= avail}
+                                style={{ width: "30px", height: "30px", borderRadius: "7px", background: qty >= avail ? "#F3F4F6" : T.green5, border: `1px solid ${qty >= avail ? T.border : T.green3}`, color: qty >= avail ? T.stoneL : T.green1, cursor: qty >= avail ? "default" : "pointer", fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>+</button>
+                              {qty > 0 && tier.price > 0 && (
+                                <span style={{ color: T.earth, fontWeight: 700, fontSize: "0.82rem", marginLeft: "4px" }}>${(tier.price * qty).toFixed(2)}</span>
+                              )}
+                              {qty > 0 && tier.price === 0 && (
+                                <span style={{ color: T.green1, fontWeight: 700, fontSize: "0.78rem", marginLeft: "4px" }}>Free ×{qty}</span>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div style={{ color: tier.price === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "1.05rem", fontFamily: "'Lora',serif", flexShrink: 0, marginLeft: "8px" }}>
-                          {tier.price === 0 ? "Free" : `$${tier.price}`}
+                      );
+                    })}
+                  </div>
+                  {/* Order summary + Add to Cart */}
+                  {totalQty > 0 && (
+                    <div style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
+                      <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>Order Summary</div>
+                      {tiers.filter(t => (tierQtys[t.id] || 0) > 0).map(tier => (
+                        <div key={tier.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem", marginBottom: "4px" }}>
+                          <span style={{ color: T.textMid }}>{tier.name} × {tierQtys[tier.id]}</span>
+                          <span style={{ color: T.textMid, fontWeight: 600 }}>{tier.price === 0 ? "Free" : `$${(tier.price * tierQtys[tier.id]).toFixed(2)}`}</span>
+                        </div>
+                      ))}
+                      {cartTotal > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", borderTop: `1px solid ${T.border}`, marginTop: "8px", paddingTop: "8px" }}>
+                          <span style={{ color: T.text, fontWeight: 700, fontSize: "0.85rem" }}>Total</span>
+                          <span style={{ color: T.earth, fontWeight: 700, fontSize: "0.95rem" }}>${cartTotal.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {anyInCart && totalQty === 0 ? (
+                    <button onClick={() => setCartOpen(true)} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>View Cart 🛒</button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (totalQty === 0) return;
+                        tiers.forEach(tier => {
+                          const qty = tierQtys[tier.id] || 0;
+                          if (qty > 0) addToCart(ev, qty, tier);
+                        });
+                        setSelectedTierId(null);
+                      }}
+                      disabled={totalQty === 0}
+                      style={{ width: "100%", background: totalQty === 0 ? "#E5E7EB" : `linear-gradient(135deg,${T.green1},${T.green2})`, color: totalQty === 0 ? T.stoneL : "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: totalQty === 0 ? "default" : "pointer", fontFamily: "inherit", boxShadow: totalQty > 0 ? `0 4px 18px ${T.green1}44` : "none", transition: "all 0.2s" }}>
+                      {totalQty === 0 ? "Select tickets above" : cartTotal === 0 ? `Register Free 🌿` : `Add ${totalQty} ticket${totalQty !== 1 ? "s" : ""} to Cart 🛒`}
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            // Single tier — original clean UI unchanged
+            return (
+              <div style={{ marginBottom: "18px" }}>
+                <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Select Ticket Type</div>
+                <div style={{ display: "grid", gap: "8px" }}>
+                  {tiers.map(tier => {
+                    const isSel = activeTierId === tier.id;
+                    const evFull = spotsLeft(ev) === 0;
+                    return (
+                      <div key={tier.id} onClick={() => { if (!evFull) { setSelectedTierId(tier.id); setRegQty(1); } }}
+                        style={{ border: `2px solid ${isSel ? T.green2 : T.border}`, borderRadius: "12px", padding: "11px 14px", cursor: evFull ? "default" : "pointer", background: isSel ? `${T.green1}0A` : evFull ? T.bg : "#fff", opacity: evFull ? 0.55 : 1, transition: "all 0.15s" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              {isSel && !evFull && <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: T.green2 }} />}
+                              <span style={{ color: T.text, fontWeight: 700, fontSize: "0.88rem" }}>{tier.name}</span>
+                            </div>
+                            {tier.description && <div style={{ color: T.textSoft, fontSize: "0.73rem", marginTop: "1px" }}>{tier.description}</div>}
+                          </div>
+                          <div style={{ color: tier.price === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "1.05rem", fontFamily: "'Lora',serif", flexShrink: 0, marginLeft: "8px" }}>
+                            {tier.price === 0 ? "Free" : `$${tier.price}`}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Overall capacity bar */}
           {ev.showAttendanceBar !== false && (() => {
@@ -3972,7 +4083,7 @@ function DetailView() {
             );
           })()}
 
-          {/* Quantity + CTA */}
+          {/* Quantity + CTA — only shown for single-tier events */}
           {registered ? (
             <div>
               <CountdownTimer ev={ev} />
@@ -3997,20 +4108,22 @@ function DetailView() {
                 </button>
               )}
             </div>
-          ) : isInCart(ev.id, selectedTier?.id) ? (
-            <button onClick={() => setCartOpen(true)} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart &mdash; View Cart 🛒</button>
-          ) : selectedTier ? (
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
-                <button onClick={() => setRegQty(q => Math.max(1, q - 1))} style={{ width: "34px", height: "34px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.2rem", fontWeight: 700 }}>−</button>
-                <span style={{ color: T.text, fontWeight: 700, fontSize: "1.1rem", minWidth: "24px", textAlign: "center" }}>{registerQty}</span>
-                <button onClick={() => setRegQty(q => Math.min(Math.max(0, selectedTier.capacity - selectedTier.sold), q + 1))} style={{ width: "34px", height: "34px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.2rem", fontWeight: 700 }}>+</button>
-                {selectedTier.price > 0 && <span style={{ color: T.earth, fontWeight: 700, fontSize: "0.9rem" }}>${(selectedTier.price * registerQty).toFixed(2)}</span>}
+          ) : tiers.length === 1 ? (
+            isInCart(ev.id, selectedTier?.id) ? (
+              <button onClick={() => setCartOpen(true)} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart — View Cart 🛒</button>
+            ) : selectedTier ? (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
+                  <button onClick={() => setRegQty(q => Math.max(1, q - 1))} style={{ width: "34px", height: "34px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.2rem", fontWeight: 700 }}>−</button>
+                  <span style={{ color: T.text, fontWeight: 700, fontSize: "1.1rem", minWidth: "24px", textAlign: "center" }}>{registerQty}</span>
+                  <button onClick={() => setRegQty(q => Math.min(Math.max(0, selectedTier.capacity - selectedTier.sold), q + 1))} style={{ width: "34px", height: "34px", borderRadius: "8px", background: T.green5, border: `1px solid ${T.border}`, color: T.green1, cursor: "pointer", fontSize: "1.2rem", fontWeight: 700 }}>+</button>
+                  {selectedTier.price > 0 && <span style={{ color: T.earth, fontWeight: 700, fontSize: "0.9rem" }}>${(selectedTier.price * registerQty).toFixed(2)}</span>}
+                </div>
+                <button onClick={() => addToCart(ev, registerQty, selectedTier)} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 18px ${T.green1}44` }}>
+                  {selectedTier.price === 0 ? "Register Free 🌿" : `Add to Cart 🛒`}
+                </button>
               </div>
-              <button onClick={() => addToCart(ev, registerQty, selectedTier)} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 18px ${T.green1}44` }}>
-                {selectedTier.price === 0 ? "Register Free 🌿" : `Add to Cart 🛒`}
-              </button>
-            </div>
+            ) : null
           ) : null}
 
           <div style={{ color: T.stoneL, fontSize: "0.72rem", textAlign: "center", marginTop: "12px" }}>Instant confirmation · No hidden fees</div>
