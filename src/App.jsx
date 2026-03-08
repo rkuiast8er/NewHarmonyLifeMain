@@ -515,9 +515,15 @@ function CountdownTimer({ ev }) {
     const s = Math.floor((diff % 60000) / 1000);
     return { d, h, m, s, diff };
   };
+  // Keep a ref to the latest calcTime so the setInterval callback always
+  // calls the current version without needing to restart on every ev change.
+  const calcTimeRef = useRef(calcTime);
+  calcTimeRef.current = calcTime;
+
   const [time, setTime] = useState(calcTime);
   useEffect(() => {
-    const interval = setInterval(() => setTime(calcTime()), 1000);
+    setTime(calcTimeRef.current()); // sync immediately when ev changes
+    const interval = setInterval(() => setTime(calcTimeRef.current()), 1000);
     return () => clearInterval(interval);
   }, [ev.startDate, ev.time]);
   if (!time) return null;
@@ -760,7 +766,7 @@ You are visiting a working farm as a participant who is either observing or cont
   const [reviews, setReviews] = useState({}); // { eventId: [{id,userId,userName,rating,text,createdAt}] }
   const [qaItems, setQaItems] = useState({}); // { eventId: [{id,userId,userName,question,answer,createdAt,answeredAt}] }
   const [interests, setInterests] = useState(() => { try { return JSON.parse(localStorage.getItem("nh_interests") || "{}"); } catch { return {}; } });
-  const [following, setFollowing] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem("nh_following") || "[]")); } catch { return new Set(); } });
+  const [following, setFollowing] = useState(() => { try { return JSON.parse(localStorage.getItem("nh_following") || "[]"); } catch { return []; } });
   const [swRegistered, setSwRegistered] = useState(false);
   // ─── NEW FEATURE STATE ───────────────────────────────────────────────────────
   const [eventPhotos, setEventPhotos] = useState({}); // { eventId: [{id, url, caption, uploadedBy, uploadedAt}] }
@@ -1228,10 +1234,11 @@ You are visiting a working farm as a participant who is either observing or cont
   const toggleFollow = (organizer) => {
     if (!currentUser) { showToast("Sign in to follow organizers", "warn"); return; }
     setFollowing(prev => {
-      const next = new Set(prev);
-      if (next.has(organizer)) { next.delete(organizer); showToast(`Unfollowed ${organizer}`); }
-      else { next.add(organizer); showToast(`Following ${organizer} 🌿`); }
-      localStorage.setItem("nh_following", JSON.stringify([...next]));
+      const isFollowing = prev.includes(organizer);
+      const next = isFollowing ? prev.filter(o => o !== organizer) : [...prev, organizer];
+      if (isFollowing) showToast(`Unfollowed ${organizer}`);
+      else showToast(`Following ${organizer} 🌿`);
+      localStorage.setItem("nh_following", JSON.stringify(next));
       return next;
     });
   };
@@ -1407,7 +1414,7 @@ You are visiting a working farm as a participant who is either observing or cont
         setTimeout(() => sendLocalNotification(`🌿 Tomorrow: ${ev.title}`, `Don't forget! ${ev.title} is tomorrow at ${fmtTime(ev.time)}.`, `reminder-1-${ev.id}`), 500);
       }
     });
-  }, [myTickets, events, currentUser]);
+  }, [myTickets, events, currentUser, notifPrefs]);
 
   // ─── EVENT DUPLICATION &mdash; handled in handleSave/startEdit section below ──────
 
@@ -1580,6 +1587,10 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
   const completeOrder = async () => {
     if (!validatePayment()) return;
     setProcessing(true);
+    // Snapshot cart immediately — we call setCart([]) later and don't want the
+    // email-build code below to reference stale (empty) state.
+    const cartSnapshot = cart;
+    const cartTotalSnapshot = cartTotal;
     try {
       const orderNum = "NHL-" + Math.random().toString(36).substr(2, 8).toUpperCase();
       const buyerName = `${checkoutInfo.firstName} ${checkoutInfo.lastName}`;
@@ -1620,7 +1631,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       const orderId = fetchedOrder.id;
 
       // Create ticket records — one row per individual ticket (not per cart item)
-      const ticketInserts = cart.flatMap(item =>
+      const ticketInserts = cartSnapshot.flatMap(item =>
         Array.from({ length: item.qty }, () => ({
           ticket_id: genTicketId(),
           order_id: orderId,
@@ -1663,7 +1674,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       }
 
       // Update tier sold counts and event registered count using fresh DB values
-      for (const item of cart) {
+      for (const item of cartSnapshot) {
         const { data: freshTier } = await supabase.from("ticket_tiers").select("sold").eq("id", item.tier.id).single();
         await supabase.from("ticket_tiers").update({ sold: (freshTier?.sold ?? item.tier.sold) + item.qty }).eq("id", item.tier.id);
         const { data: freshEvent } = await supabase.from("events").select("registered").eq("id", item.event.id).single();
@@ -1711,7 +1722,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
             tierIndexes[k] = (tierIndexes[k] || 0) + 1;
             const ticketNum = tierIndexes[k];
             const tierTotal = tierCounts[k];
-            const ev = cart.find(i => i.event.id === t.eventId)?.event || {};
+            const ev = cartSnapshot.find(i => i.event.id === t.eventId)?.event || {};
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(t.ticketId)}&color=1C2B1A&bgcolor=F7F5F0`;
             const eventDate = ev.date ? new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "";
             const eventTime = ev.startTime ? (() => { const [h,m] = ev.startTime.split(":"); const hr = parseInt(h); return `${hr > 12 ? hr-12 : hr || 12}:${m} ${hr >= 12 ? "PM" : "AM"}`; })() : "";
@@ -1749,7 +1760,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
           }).join("");
 
           // Receipt summary rows
-          const receiptRows = cart.map(item =>
+          const receiptRows = cartSnapshot.map(item =>
             `<tr><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem">${item.event.title} &mdash; ${item.tier.name}</td><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem;text-align:center">${item.qty}</td><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem;text-align:right">${item.tier.price === 0 ? "Free" : "$" + (item.tier.price * item.qty).toFixed(2)}</td></tr>`
           ).join("");
 
@@ -1779,7 +1790,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     <table style="width:100%;border-collapse:collapse;margin-bottom:4px">
       <thead><tr style="background:#F7F5F0"><th style="padding:9px 14px;text-align:left;color:#3D5A38;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Item</th><th style="padding:9px 14px;text-align:center;color:#3D5A38;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Qty</th><th style="padding:9px 14px;text-align:right;color:#3D5A38;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Price</th></tr></thead>
       <tbody>${receiptRows}</tbody>
-      <tfoot><tr style="background:#F7F5F0"><td colspan="2" style="padding:11px 14px;font-weight:700;color:#1C2B1A;font-size:0.9rem">Total</td><td style="padding:11px 14px;font-weight:700;color:#1C2B1A;text-align:right;font-size:0.9rem">${cartTotal === 0 ? "Free" : "$" + cartTotal.toFixed(2)}</td></tr></tfoot>
+      <tfoot><tr style="background:#F7F5F0"><td colspan="2" style="padding:11px 14px;font-weight:700;color:#1C2B1A;font-size:0.9rem">Total</td><td style="padding:11px 14px;font-weight:700;color:#1C2B1A;text-align:right;font-size:0.9rem">${cartTotalSnapshot === 0 ? "Free" : "$" + cartTotalSnapshot.toFixed(2)}</td></tr></tfoot>
     </table>
     <p style="color:#9CA3AF;font-size:0.75rem;margin:14px 0 0">Payment method: ${payMethod === "card" ? "Credit / Debit Card" : payMethod === "paypal" ? "PayPal" : payMethod}</p>
   </div>
@@ -1798,7 +1809,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
             body: JSON.stringify({
               from: "New Harmony Life <tickets@newharmonylife.com>",
               to: [checkoutInfo.email],
-              subject: `Your tickets: ${cart.map(i => i.event.title).filter((v,i,a) => a.indexOf(v)===i).join(", ")} — ${orderNum}`,
+              subject: `Your tickets: ${cartSnapshot.map(i => i.event.title).filter((v,i,a) => a.indexOf(v)===i).join(", ")} — ${orderNum}`,
               html: emailHtml,
             }),
           });
@@ -1807,9 +1818,9 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         }
       }
 
-      setOrderComplete({ orderNum, tickets: newTickets, total: cartTotal, buyer: checkoutInfo });
+      setOrderComplete({ orderNum, tickets: newTickets, total: cartTotalSnapshot, buyer: checkoutInfo });
+      setCart([]);           // clear cart now that order is fully recorded
       await loadEvents();
-      setCart([]);
       setCheckoutStep(3);
     } catch (e) {
       showToast("Something went wrong: " + e.message, "warn");
@@ -2504,7 +2515,7 @@ function ActivityFeedPanel() {
 
   useEffect(() => {
     if (!loaded && events.length > 0) { loadActivityFeed().catch(() => {}); setLoaded(true); }
-  }, [events.length]);
+  }, [events.length, loaded, loadActivityFeed]);
 
   if (activityFeed.length === 0) return null;
 
@@ -2571,42 +2582,9 @@ function StarRating({ value, onChange, size = 22, readonly = false }) {
   );
 }
 
-// ─── PWA INSTALL BANNER ───────────────────────────────────────────────────────
-function PWAInstallBanner() {
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem("nh_pwa_dismissed") === "1");
-  const [installed, setInstalled] = useState(false);
-
-  useEffect(() => {
-    const handler = (e) => { e.preventDefault(); setDeferredPrompt(e); };
-    window.addEventListener("beforeinstallprompt", handler);
-    window.addEventListener("appinstalled", () => setInstalled(true));
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
-
-  const install = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") setInstalled(true);
-    setDeferredPrompt(null);
-  };
-
-  if (!deferredPrompt || dismissed || installed) return null;
-  return (
-    <div style={{ position: "fixed", bottom: "1.5rem", left: "50%", transform: "translateX(-50%)", zIndex: 500, background: T.bgDeep, border: `1px solid ${T.green3}40`, borderRadius: "16px", padding: "14px 20px", display: "flex", alignItems: "center", gap: "14px", boxShadow: "0 8px 32px rgba(0,0,0,0.3)", maxWidth: "min(420px, 90vw)", width: "100%", animation: "slideUp 0.3s ease" }}>
-      <div style={{ fontSize: "2rem", flexShrink: 0 }}>🌿</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ color: "#fff", fontWeight: 700, fontSize: "0.88rem", marginBottom: "2px" }}>Install New Harmony Life</div>
-        <div style={{ color: T.green4, fontSize: "0.76rem" }}>Add to your home screen for quick access & offline browsing</div>
-      </div>
-      <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-        <button onClick={install} style={{ background: T.green1, color: "#fff", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.8rem", whiteSpace: "nowrap" }}>Install</button>
-        <button onClick={() => { setDismissed(true); localStorage.setItem("nh_pwa_dismissed", "1"); }} style={{ background: "rgba(255,255,255,0.1)", color: T.stoneL, border: "none", borderRadius: "8px", padding: "8px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.8rem" }}>✕</button>
-      </div>
-    </div>
-  );
-}
+// PWAInstallBanner was removed — install prompt is handled solely by the
+// inline banner in AppShell (driven by installPrompt context state), which
+// avoids registering a second competing beforeinstallprompt listener.
 
 // ─── ADD TO CALENDAR DROPDOWN ─────────────────────────────────────────────────
 function AddToCalendar({ ev }) {
@@ -3563,7 +3541,7 @@ function DiscoverView() {
   const showFreeBtn = sortConfig.enabled && sortConfig.items.some(i => i.group === "price" && i.id === "price-free");
   const activeFilterCount = (filterCat !== "All" ? 1 : 0) + (filterDate !== "all" ? 1 : 0) + (filterPrice !== "all" ? 1 : 0) + (filterFollowing ? 1 : 0) + filterVibe.length;
   const clearAll = () => { setSearch(""); setFilterCat("All"); setFilterDate("all"); setFilterPrice("all"); setFilterFollowing(false); setFilterVibe([]); };
-  const displayEvents = filterFollowing ? filteredEvents.filter(ev => following.has(ev.organizer)) : filteredEvents;
+  const displayEvents = filterFollowing ? filteredEvents.filter(ev => following.includes(ev.organizer)) : filteredEvents;
   return (
     <div style={{ minHeight: "100vh", background: T.bg }}>
       <div style={{ background: `linear-gradient(160deg,${T.bgDeep} 0%,${T.bgMid} 100%)`, padding: "4rem 2rem 3rem", textAlign: "center", position: "relative", overflow: "hidden" }}>
@@ -3595,7 +3573,7 @@ function DiscoverView() {
             <div style={{ position: "absolute", right: 0, top: 0, bottom: "4px", width: "40px", background: `linear-gradient(to right, transparent, ${T.bg})`, pointerEvents: "none" }} />
           </div>
         )}
-        {(sortConfig.enabled || following.size > 0) && (
+        {(sortConfig.enabled || following.length > 0) && (
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
             {sortConfig.enabled && activeDateItems.map(item => {
               const label = item.label.toLowerCase();
@@ -3603,7 +3581,7 @@ function DiscoverView() {
               return <button key={item.id} onClick={() => setFilterDate(filterDate === val ? "all" : val)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterDate === val ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterDate === val ? `${T.earthL}30` : "transparent", color: filterDate === val ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>{item.label}</button>;
             })}
             {sortConfig.enabled && showFreeBtn && <button onClick={() => setFilterPrice(filterPrice === "free" ? "all" : "free")} style={{ padding: "6px 14px", borderRadius: "100px", border: filterPrice === "free" ? `1px solid ${T.green2}` : `1px solid ${T.border}`, background: filterPrice === "free" ? T.green5 : "transparent", color: filterPrice === "free" ? T.green1 : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🎁 Free</button>}
-            {following.size > 0 && <button onClick={() => setFilterFollowing(f => !f)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterFollowing ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterFollowing ? `${T.earth}18` : "transparent", color: filterFollowing ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🔔 Following</button>}
+            {following.length > 0 && <button onClick={() => setFilterFollowing(f => !f)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterFollowing ? `1px solid ${T.earth}` : `1px solid ${T.border}`, background: filterFollowing ? `${T.earth}18` : "transparent", color: filterFollowing ? T.earth : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit" }}>🔔 Following</button>}
           </div>
         )}
       </div>
@@ -3930,7 +3908,7 @@ function DetailView() {
             const intr = getInterest(ev.id);
             const isGoing = currentUser && intr.going.includes(currentUser.id);
             const isInterested = currentUser && intr.interested.includes(currentUser.id);
-            const isFollowing = following.has(ev.organizer);
+            const isFollowing = following.includes(ev.organizer);
             return (
               <div style={{ display: "flex", gap: "8px", marginBottom: "1.5rem", flexWrap: "wrap", alignItems: "center" }}>
                 {currentUser && (
@@ -7436,7 +7414,7 @@ function SavedView() {
   const uid = currentUser.id;
   const goingEvents = events.filter(ev => (getInterest(ev.id).going || []).includes(uid));
   const interestedEvents = events.filter(ev => (getInterest(ev.id).interested || []).includes(uid));
-  const followedEvents = events.filter(ev => following.has(ev.organizer));
+  const followedEvents = events.filter(ev => following.includes(ev.organizer));
 
   const EventPill = ({ ev }) => (
     <div onClick={() => { setSelectedId(ev.id); setView("detail"); }}
@@ -7471,10 +7449,10 @@ function SavedView() {
       <p style={{ color: T.textSoft, fontSize: "0.9rem", marginBottom: "2rem" }}>Events you're tracking and organizers you follow.</p>
       <Section emoji="✅" title="Going" items={goingEvents} empty="No events marked as going yet" />
       <Section emoji="❤️" title="Interested" items={interestedEvents} empty="No events marked as interested yet &mdash; browse events and tap ⭐ Interested" />
-      <Section emoji="🔔" title="Events from Followed Organizers" items={followedEvents} empty={following.size === 0 ? "Follow organizers from any event page to see their events here" : "No upcoming events from organizers you follow"} />
-      {following.size > 0 && (
+      <Section emoji="🔔" title="Events from Followed Organizers" items={followedEvents} empty={following.length === 0 ? "Follow organizers from any event page to see their events here" : "No upcoming events from organizers you follow"} />
+      {following.length > 0 && (
         <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "14px", padding: "18px" }}>
-          <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1rem", margin: "0 0 12px" }}>🔔 Following ({following.size})</h3>
+          <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1rem", margin: "0 0 12px" }}>🔔 Following ({following.length})</h3>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
             {[...following].map(org => (
               <div key={org} style={{ background: T.green5, color: T.green1, borderRadius: "100px", padding: "6px 14px", fontSize: "0.82rem", fontWeight: 600 }}>
@@ -7495,7 +7473,7 @@ function MobileBottomNav() {
   // Count user's saves
   const uid = currentUser?.id;
   const savedCount = uid
-    ? Object.values(interests).filter(i => i.going?.includes(uid) || i.interested?.includes(uid)).length + following.size
+    ? Object.values(interests).filter(i => i.going?.includes(uid) || i.interested?.includes(uid)).length + following.length
     : 0;
 
   const navItems = [
@@ -7991,13 +7969,20 @@ function Footer() {
 // ─── APP SHELL ────────────────────────────────────────────────────────────────
 function AppShell() {
   const { view, currentUser, installPrompt, setInstallPrompt, isInstalled, isOnline, setView, openAuth, dashUnlocked } = useApp();
-  const [showInstallBanner, setShowInstallBanner] = useState(true);
+  const [showInstallBanner, setShowInstallBanner] = useState(
+    () => localStorage.getItem("nh_pwa_dismissed") !== "1"
+  );
 
   const handleInstall = async () => {
     if (!installPrompt) return;
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === "accepted") { setInstallPrompt(null); setShowInstallBanner(false); }
+  };
+
+  const dismissInstallBanner = () => {
+    setShowInstallBanner(false);
+    localStorage.setItem("nh_pwa_dismissed", "1");
   };
 
   const mobileHidden = ["checkout", "dashlogin", "dashboard", "create", "dayofmode", "admindetail"].includes(view);
@@ -8022,12 +8007,11 @@ function AppShell() {
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={handleInstall} style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "8px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem" }}>Install App</button>
-            <button onClick={() => setShowInstallBanner(false)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: T.stoneL, borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem" }}>Not now</button>
+            <button onClick={dismissInstallBanner} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: T.stoneL, borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem" }}>Not now</button>
           </div>
         </div>
       )}
       <Navbar />
-      {currentUser && view !== "dashlogin" && (
         <div style={{ background: `linear-gradient(90deg,${T.bgMid},${T.bgDeep})`, borderBottom: `1px solid rgba(116,198,157,0.15)`, padding: "9px 2rem", display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: "26px", height: "26px", borderRadius: "50%", background: (currentUser.avatarColor || currentUser.avatar_color || "#40916C"), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 700, flexShrink: 0 }}>{initials(currentUser)}</div>
           <span style={{ color: T.green4, fontSize: "0.875rem" }}>
@@ -8064,7 +8048,6 @@ function AppShell() {
       <CalendarEventModal />
       <AuthModal />
       <Toast />
-      <PWAInstallBanner />
       {/* Mobile bottom navigation */}
       {!mobileHidden && <MobileBottomNav />}
     </div>
