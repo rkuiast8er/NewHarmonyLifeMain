@@ -2129,9 +2129,9 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
 
   // ─── FILTERED EVENTS ───────────────────────────────────────────────────────
   const visibleEvents = activeEvents.filter(ev => {
-    // Private events are never shown in the public discover feed
-    // They're only accessible via direct invite link or password
-    if (ev.isPrivate === true) return false;
+    // Private events are hidden from the public discover feed —
+    // but admins with the dashboard unlocked can see everything
+    if (ev.isPrivate === true && !dashUnlocked) return false;
     // Non-logged-in users only see public events
     if (!currentUser && ev.isPublic === false) return false;
     return true;
@@ -3745,7 +3745,7 @@ function QASection({ ev }) {
 
 // ─── DETAIL VIEW ──────────────────────────────────────────────────────────────
 function DetailView() {
-  const { selectedEvent, setView, setCartOpen, addToCart, openVendorModal, openAuth, isInCart, isReg, isOnWaitlist, joinWaitlist, leaveWaitlist, registerQty, setRegQty, currentUser, selectedTierId, setSelectedTierId, toggleInterest, getInterest, toggleFollow, following, copyReferralLink, showToast, vibeConfig, eventTypeConfig, categoryConfig } = useApp();
+  const { selectedEvent, setView, setCartOpen, addToCart, openVendorModal, openAuth, isInCart, isReg, isOnWaitlist, joinWaitlist, leaveWaitlist, registerQty, setRegQty, currentUser, selectedTierId, setSelectedTierId, toggleInterest, getInterest, toggleFollow, following, copyReferralLink, showToast, vibeConfig, eventTypeConfig, categoryConfig, dashUnlocked } = useApp();
   const [privateInput, setPrivateInput] = React.useState("");
   const [privateUnlocked, setPrivateUnlocked] = React.useState(false);
   const [privateError, setPrivateError] = React.useState(false);
@@ -3756,8 +3756,8 @@ function DetailView() {
   const urlToken = new URLSearchParams(window.location.search).get("invite");
   const tokenValid = ev.inviteToken && urlToken && ev.inviteToken === urlToken;
 
-  // Private event gate &mdash; bypass if valid invite token
-  if (ev.isPrivate && !tokenValid && !privateUnlocked) {
+  // Private event gate — bypassed for admins and valid invite tokens
+  if (ev.isPrivate && !tokenValid && !privateUnlocked && !dashUnlocked) {
     // If there's a password, show password form; if invite-only (no password), show locked message
     return (
       <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
@@ -5693,7 +5693,17 @@ function AdminDetailView() {
   // Local vendor check-in state (keyed by vendor id)
   const [vendorCheckins, setVendorCheckins] = React.useState({});
 
-  // Load tickets for this event on mount
+  // ── Expense tracker state ──
+  const EXPENSE_CATEGORIES = ["Venue", "Equipment", "Marketing", "Staffing", "Food & Beverage", "Permits & Fees", "Supplies", "Entertainment", "Travel", "Other"];
+  const expenseKey = ev?.id ? `nh_expenses_${ev.id}` : null;
+  const loadExpenses = () => { try { return JSON.parse(localStorage.getItem(expenseKey) || "[]"); } catch { return []; } };
+  const [expenses, setExpenses] = React.useState([]);
+  const [expenseForm, setExpenseForm] = React.useState({ description: "", category: "Venue", amount: "", date: "", notes: "" });
+  const [expenseFormError, setExpenseFormError] = React.useState("");
+  const [editingExpenseId, setEditingExpenseId] = React.useState(null);
+  const [expenseCatFilter, setExpenseCatFilter] = React.useState("All");
+
+  // Load tickets + expenses on mount
   React.useEffect(() => {
     if (!ev?.id) return;
     setTicketsLoading(true);
@@ -5717,7 +5727,50 @@ function AdminDetailView() {
       const saved = localStorage.getItem(`vendor_checkins_${ev.id}`);
       if (saved) setVendorCheckins(JSON.parse(saved));
     } catch(e) {}
+    // Load expenses
+    setExpenses(loadExpenses());
   }, [ev?.id]);
+
+  const saveExpenses = (list) => {
+    setExpenses(list);
+    try { localStorage.setItem(expenseKey, JSON.stringify(list)); } catch(e) {}
+  };
+
+  const submitExpense = () => {
+    if (!expenseForm.description.trim()) { setExpenseFormError("Description is required."); return; }
+    const amt = parseFloat(expenseForm.amount);
+    if (!expenseForm.amount || isNaN(amt) || amt < 0) { setExpenseFormError("Enter a valid amount (0 or more)."); return; }
+    setExpenseFormError("");
+    if (editingExpenseId) {
+      saveExpenses(expenses.map(e => e.id === editingExpenseId ? { ...e, ...expenseForm, amount: amt } : e));
+      setEditingExpenseId(null);
+    } else {
+      saveExpenses([...expenses, { id: Date.now().toString(), ...expenseForm, amount: amt, addedAt: new Date().toISOString() }]);
+    }
+    setExpenseForm({ description: "", category: "Venue", amount: "", date: "", notes: "" });
+  };
+
+  const deleteExpense = (id) => { if (window.confirm("Delete this expense?")) saveExpenses(expenses.filter(e => e.id !== id)); };
+
+  const startEditExpense = (exp) => {
+    setEditingExpenseId(exp.id);
+    setExpenseForm({ description: exp.description, category: exp.category, amount: String(exp.amount), date: exp.date || "", notes: exp.notes || "" });
+    setExpenseFormError("");
+  };
+
+  const cancelEditExpense = () => {
+    setEditingExpenseId(null);
+    setExpenseForm({ description: "", category: "Venue", amount: "", date: "", notes: "" });
+    setExpenseFormError("");
+  };
+
+  const exportExpensesCSV = () => {
+    const rows = [["Description", "Category", "Amount", "Date", "Notes"]];
+    expenses.forEach(e => rows.push([e.description, e.category, `$${e.amount.toFixed(2)}`, e.date || "", e.notes || ""]));
+    const csv = rows.map(r => r.map(c => `"${(c||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `${(ev.title||"event").replace(/\s+/g,"_")}_expenses.csv`; a.click();
+  };
 
   const toggleVendorCheckin = (vendorId) => {
     setVendorCheckins(prev => {
@@ -5818,14 +5871,23 @@ function AdminDetailView() {
       <div style={{ maxWidth: "1060px", margin: "0 auto", padding: "2rem" }}>
 
         {/* ── KPI STAT CARDS ── */}
-        <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginBottom: "24px" }}>
-          <StatCard icon="🎟️" label="Registered" value={sold} sub={`of ${cap} capacity`} color={pctFull >= 90 ? T.warn : T.green1} />
-          <StatCard icon="🪑" label="Spots Left" value={spots} sub={spots === 0 ? "SOLD OUT" : `${pctFull}% full`} color={spots === 0 ? T.warn : spots <= 10 ? "#D97706" : T.green2} />
-          <StatCard icon="💰" label="Revenue" value={`$${revenue.toLocaleString()}`} sub={(ev.ticketTiers||[]).filter(t => t.price > 0).length > 0 ? `${(ev.ticketTiers||[]).filter(t=>t.price>0).length} paid tier${(ev.ticketTiers||[]).filter(t=>t.price>0).length!==1?"s":""}` : "Free event"} color={T.gold} />
-          <StatCard icon="✅" label="Going" value={intr.going.length} sub={`${intr.interested.length} interested`} color={T.green2} />
-          {waitlist.length > 0 && <StatCard icon="⏳" label="Waitlist" value={waitlist.length} sub="waiting for spots" color="#D97706" />}
-          {avgRating > 0 && <StatCard icon="⭐" label="Avg Rating" value={avgRating.toFixed(1)} sub={`${evReviews.length} review${evReviews.length !== 1 ? "s" : ""}`} color={T.gold} />}
-        </div>
+        {(() => {
+          const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+          const netProfit = revenue - totalExpenses;
+          return (
+            <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginBottom: "24px" }}>
+              <StatCard icon="🎟️" label="Registered" value={sold} sub={`of ${cap} capacity`} color={pctFull >= 90 ? T.warn : T.green1} />
+              <StatCard icon="🪑" label="Spots Left" value={spots} sub={spots === 0 ? "SOLD OUT" : `${pctFull}% full`} color={spots === 0 ? T.warn : spots <= 10 ? "#D97706" : T.green2} />
+              <StatCard icon="💰" label="Revenue" value={`$${revenue.toLocaleString()}`} sub={(ev.ticketTiers||[]).filter(t => t.price > 0).length > 0 ? `${(ev.ticketTiers||[]).filter(t=>t.price>0).length} paid tier${(ev.ticketTiers||[]).filter(t=>t.price>0).length!==1?"s":""}` : "Free event"} color={T.gold} />
+              {expenses.length > 0 && <StatCard icon="📋" label="Expenses" value={`$${totalExpenses.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`} sub={`${expenses.length} item${expenses.length!==1?"s":""}`} color={T.warn} />}
+              {expenses.length > 0 && <StatCard icon={netProfit >= 0 ? "📈" : "📉"} label="Net Profit" value={`${netProfit < 0 ? "-" : ""}$${Math.abs(netProfit).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`} sub={netProfit >= 0 ? "after expenses" : "currently a loss"} color={netProfit >= 0 ? T.green1 : T.warn} />}
+              <StatCard icon="✅" label="Going" value={intr.going.length} sub="marked as going" color={T.green2} />
+              <StatCard icon="⭐" label="Interested" value={intr.interested.length} sub="marked interested" color={T.gold} />
+              {waitlist.length > 0 && <StatCard icon="⏳" label="Waitlist" value={waitlist.length} sub="waiting for spots" color="#D97706" />}
+              {avgRating > 0 && <StatCard icon="🌟" label="Avg Rating" value={avgRating.toFixed(1)} sub={`${evReviews.length} review${evReviews.length !== 1 ? "s" : ""}`} color="#F59E0B" />}
+            </div>
+          );
+        })()}
 
         {/* Capacity bar */}
         <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "16px 20px", marginBottom: "20px" }}>
@@ -6138,29 +6200,6 @@ function AdminDetailView() {
             </Section>
           )}
 
-          {/* ── INTEREST & SOCIAL ── */}
-          <Section title="Interest & Social" icon="📣">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
-              <div style={{ background: T.green5, borderRadius: "10px", padding: "14px", textAlign: "center" }}>
-                <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "4px" }}>Going</div>
-                <div style={{ color: T.green1, fontWeight: 700, fontSize: "1.8rem", fontFamily: "'Lora',serif" }}>{intr.going.length}</div>
-              </div>
-              <div style={{ background: "#FFF8E7", border: `1px solid ${T.gold}30`, borderRadius: "10px", padding: "14px", textAlign: "center" }}>
-                <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "4px" }}>Interested</div>
-                <div style={{ color: T.gold, fontWeight: 700, fontSize: "1.8rem", fontFamily: "'Lora',serif" }}>{intr.interested.length}</div>
-              </div>
-            </div>
-            {avgRating > 0 && (
-              <div style={{ background: T.cream, borderRadius: "10px", padding: "12px 14px", display: "flex", alignItems: "center", gap: "12px" }}>
-                <div style={{ color: "#F59E0B", fontSize: "1.5rem" }}>★</div>
-                <div>
-                  <div style={{ color: T.text, fontWeight: 700, fontSize: "1.05rem" }}>{avgRating.toFixed(1)} / 5.0</div>
-                  <div style={{ color: T.stoneL, fontSize: "0.75rem" }}>{evReviews.length} review{evReviews.length !== 1 ? "s" : ""}</div>
-                </div>
-              </div>
-            )}
-          </Section>
-
           {/* ── VIBE TAGS & CUSTOM QUESTIONS ── */}
           {((ev.vibeTags || []).length > 0 || (ev.customQuestions || []).length > 0) && (
             <Section title="Tags & Custom Questions" icon="🏷️">
@@ -6191,6 +6230,163 @@ function AdminDetailView() {
           )}
 
         </div>
+
+        {/* ── EXPENSES ── */}
+        {(() => {
+          const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+          const netProfit = revenue - totalExpenses;
+          const catTotals = EXPENSE_CATEGORIES.reduce((acc, cat) => {
+            const total = expenses.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0);
+            if (total > 0) acc[cat] = total;
+            return acc;
+          }, {});
+          const filtered = expenseCatFilter === "All" ? expenses : expenses.filter(e => e.category === expenseCatFilter);
+          const inp = (err) => ({ padding: "9px 12px", borderRadius: "9px", border: `1px solid ${err ? T.warn : T.border}`, fontFamily: "inherit", fontSize: "0.85rem", background: "#fff", outline: "none", width: "100%" });
+          return (
+            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "20px" }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px", flexWrap: "wrap", gap: "10px" }}>
+                <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.05rem", margin: 0 }}>📋 Event Expenses</h3>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  {expenses.length > 0 && (
+                    <>
+                      <span style={{ background: "#FEE2E2", color: T.warn, borderRadius: "6px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700 }}>
+                        Total: ${totalExpenses.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+                      </span>
+                      <span style={{ background: netProfit >= 0 ? T.green5 : "#FEE2E2", color: netProfit >= 0 ? T.green1 : T.warn, borderRadius: "6px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700 }}>
+                        {netProfit >= 0 ? "📈" : "📉"} Net: {netProfit < 0 ? "-" : ""}${Math.abs(netProfit).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+                      </span>
+                      <button onClick={exportExpensesCSV} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "5px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>⬇ Export CSV</button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Add / Edit form */}
+              <div style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "16px 18px", marginBottom: "20px" }}>
+                <div style={{ color: T.textMid, fontWeight: 700, fontSize: "0.85rem", marginBottom: "12px" }}>{editingExpenseId ? "✏️ Edit Expense" : "＋ Add Expense"}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                  <div>
+                    <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Description *</div>
+                    <input value={expenseForm.description} onChange={e => { setExpenseForm(f => ({...f, description: e.target.value})); setExpenseFormError(""); }}
+                      placeholder="e.g. Venue rental deposit" style={inp(expenseFormError && !expenseForm.description.trim())} />
+                  </div>
+                  <div>
+                    <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Category</div>
+                    <select value={expenseForm.category} onChange={e => setExpenseForm(f => ({...f, category: e.target.value}))}
+                      style={{ ...inp(false), appearance: "none", cursor: "pointer" }}>
+                      {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Amount ($) *</div>
+                    <input type="number" min="0" step="0.01" value={expenseForm.amount} onChange={e => { setExpenseForm(f => ({...f, amount: e.target.value})); setExpenseFormError(""); }}
+                      placeholder="0.00" style={inp(expenseFormError && (!expenseForm.amount || isNaN(parseFloat(expenseForm.amount))))} />
+                  </div>
+                  <div>
+                    <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Date</div>
+                    <input type="date" value={expenseForm.date} onChange={e => setExpenseForm(f => ({...f, date: e.target.value}))} style={inp(false)} />
+                  </div>
+                </div>
+                <div style={{ marginBottom: "10px" }}>
+                  <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Notes (optional)</div>
+                  <input value={expenseForm.notes} onChange={e => setExpenseForm(f => ({...f, notes: e.target.value}))}
+                    placeholder="Invoice #, vendor name, payment method…" style={inp(false)} />
+                </div>
+                {expenseFormError && <div style={{ color: T.warn, fontSize: "0.8rem", marginBottom: "8px" }}>⚠ {expenseFormError}</div>}
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button onClick={submitExpense}
+                    style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "8px", padding: "9px 20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.85rem" }}>
+                    {editingExpenseId ? "Save Changes" : "Add Expense"}
+                  </button>
+                  {editingExpenseId && (
+                    <button onClick={cancelEditExpense} style={{ background: T.bg, color: T.textSoft, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "9px 16px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.85rem" }}>Cancel</button>
+                  )}
+                </div>
+              </div>
+
+              {/* Category breakdown pills */}
+              {Object.keys(catTotals).length > 1 && (
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
+                  {Object.entries(catTotals).sort((a,b) => b[1]-a[1]).map(([cat, total]) => (
+                    <div key={cat} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "5px 12px", fontSize: "0.75rem" }}>
+                      <span style={{ color: T.textSoft }}>{cat}</span>
+                      <span style={{ color: T.warn, fontWeight: 700, marginLeft: "6px" }}>${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                      <span style={{ color: T.stoneL, fontSize: "0.68rem", marginLeft: "4px" }}>({totalExpenses > 0 ? Math.round(total/totalExpenses*100) : 0}%)</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Filter + table */}
+              {expenses.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "2rem", color: T.stoneL, fontSize: "0.85rem" }}>No expenses recorded yet — add one above.</div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+                    <div style={{ color: T.stoneL, fontSize: "0.78rem", fontWeight: 600 }}>Filter:</div>
+                    {["All", ...EXPENSE_CATEGORIES.filter(c => expenses.some(e => e.category === c))].map(cat => (
+                      <button key={cat} onClick={() => setExpenseCatFilter(cat)}
+                        style={{ background: expenseCatFilter === cat ? T.green1 : T.bg, color: expenseCatFilter === cat ? "#fff" : T.textSoft, border: `1px solid ${expenseCatFilter === cat ? T.green1 : T.border}`, borderRadius: "6px", padding: "4px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.75rem", fontWeight: expenseCatFilter === cat ? 700 : 400 }}>{cat}</button>
+                    ))}
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem" }}>
+                      <thead>
+                        <tr style={{ background: T.bgDeep }}>
+                          {["Description", "Category", "Amount", "Date", "Notes", ""].map(h => (
+                            <th key={h} style={{ color: T.green4, padding: "9px 12px", textAlign: h === "Amount" ? "right" : "left", fontWeight: 700, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map((exp, i) => (
+                          <tr key={exp.id} style={{ background: editingExpenseId === exp.id ? `${T.green5}` : i % 2 === 0 ? "#fff" : T.cream, borderBottom: `1px solid ${T.border}` }}>
+                            <td style={{ padding: "10px 12px", color: T.text, fontWeight: 600 }}>{exp.description}</td>
+                            <td style={{ padding: "10px 12px" }}>
+                              <span style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: "5px", padding: "2px 8px", fontSize: "0.72rem", color: T.textSoft, whiteSpace: "nowrap" }}>{exp.category}</span>
+                            </td>
+                            <td style={{ padding: "10px 12px", color: T.warn, fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>${exp.amount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                            <td style={{ padding: "10px 12px", color: T.textSoft, whiteSpace: "nowrap" }}>{exp.date ? fmt(exp.date) : <span style={{ color: T.stoneL, fontStyle: "italic" }}>—</span>}</td>
+                            <td style={{ padding: "10px 12px", color: T.textSoft, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={exp.notes}>{exp.notes || <span style={{ color: T.stoneL, fontStyle: "italic" }}>—</span>}</td>
+                            <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <button onClick={() => startEditExpense(exp)} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "6px", padding: "4px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.75rem", fontWeight: 600 }}>✏️</button>
+                                <button onClick={() => deleteExpense(exp.id)} style={{ background: "#FEE2E2", color: T.warn, border: `1px solid #FECACA`, borderRadius: "6px", padding: "4px 10px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.75rem" }}>🗑️</button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: T.bgDeep, borderTop: `2px solid ${T.green3}40` }}>
+                          <td colSpan={2} style={{ padding: "10px 12px", color: T.green4, fontWeight: 700, fontSize: "0.78rem" }}>
+                            {expenseCatFilter !== "All" ? `${expenseCatFilter} subtotal` : "TOTAL EXPENSES"}
+                          </td>
+                          <td style={{ padding: "10px 12px", color: "#FCA5A5", fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>
+                            ${filtered.reduce((s,e) => s+e.amount,0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+                          </td>
+                          <td colSpan={3} />
+                        </tr>
+                        {expenseCatFilter === "All" && revenue > 0 && (
+                          <tr style={{ background: netProfit >= 0 ? "#F0FDF4" : "#FEF2F2" }}>
+                            <td colSpan={2} style={{ padding: "8px 12px", color: netProfit >= 0 ? T.green1 : T.warn, fontWeight: 700, fontSize: "0.78rem" }}>
+                              {netProfit >= 0 ? "📈 NET PROFIT" : "📉 NET LOSS"}
+                            </td>
+                            <td style={{ padding: "8px 12px", color: netProfit >= 0 ? T.green1 : T.warn, fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>
+                              {netProfit < 0 ? "-" : ""}${Math.abs(netProfit).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+                            </td>
+                            <td colSpan={3} style={{ padding: "8px 12px", color: T.stoneL, fontSize: "0.72rem" }}>revenue − expenses</td>
+                          </tr>
+                        )}
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── DANGER ZONE ── */}
         <div style={{ background: "#FEF2F2", border: `1px solid #FECACA`, borderRadius: "16px", padding: "20px 22px", marginTop: "4px" }}>
@@ -7522,4 +7718,3 @@ export default function App() {
     </>
   );
 }
-  
