@@ -1,5 +1,5 @@
 // ============================================================
-// NEW HARMONY LIFE EVENTS — FULL BUNDLED SINGLE-FILE VERSION
+// NEW HARMONY LIFE EVENTS &mdash; FULL BUNDLED SINGLE-FILE VERSION
 // For review purposes. Production uses the modular src/ layout.
 // ============================================================
 
@@ -22,7 +22,7 @@ if (typeof window !== "undefined" && !window.Recharts) {
 const SUPABASE_URL = "https://eaiutiqyrggihrunezjc.supabase.co";
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhaXV0aXF5cmdnaWhydW5lempjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MDM5NDgsImV4cCI6MjA4ODM3OTk0OH0.zbtmgrt4ou1JxMe4O5givGu-Z1W42I__quQD2Z4aa2o";
 
-// Lightweight Supabase client — no npm needed
+// Lightweight Supabase client &mdash; no npm needed
 const supabase = (() => {
   const headers = {
     "apikey": SUPABASE_ANON_KEY,
@@ -156,7 +156,7 @@ const VENDOR_TYPES = [
 ];
 
 const BOOTH_SIZES = [
-  "Small – 3 ft table", "Standard – 6 ft table", "10x10 ft tent space",
+  "Small &ndash; 3 ft table", "Standard &ndash; 6 ft table", "10x10 ft tent space",
   "10x20 ft tent space", "10x30 ft tent space", "20x20 ft tent space", "Other",
 ];
 
@@ -179,7 +179,7 @@ const INITIAL_EVENTS = [
     organizer: "New Harmony Life", tags: ["family", "outdoor", "music", "food"],
     online: false, vendorInvite: true, showVendors: true,
     vendorDeadline: "2026-08-01", profitModel: "sharing", hostPct: 15,
-    vendorInfo: "We welcome local farmers, artisan producers, and craft vendors. Booth spaces are 10x10 ft. Limited spaces — apply early!",
+    vendorInfo: "We welcome local farmers, artisan producers, and craft vendors. Booth spaces are 10x10 ft. Limited spaces &mdash; apply early!",
     waitlist: [],
     ticketTiers: [
       { id: "t1", name: "Weekend Pass", price: 35, capacity: 400, sold: 280, description: "Full 3-day access" },
@@ -196,13 +196,13 @@ const INITIAL_EVENTS = [
     id: "2", title: "Forest Bathing & Mindfulness Walk", category: "Wellness",
     startDate: "2026-04-18", endDate: "2026-04-18", time: "08:00", endTime: "11:00",
     location: "Loess Hills State Forest", address: "Preparation Canyon, IA",
-    description: "A guided morning walk through ancient bluffs and native prairie. Learn the Japanese practice of shinrin-yoku — forest bathing — and return home feeling restored.",
+    description: "A guided morning walk through ancient bluffs and native prairie. Learn the Japanese practice of shinrin-yoku &mdash; forest bathing &mdash; and return home feeling restored.",
     capacity: 40, registered: 34, photos: [], color: "#2D6A4F",
     organizer: "Prairie Roots Wellness", tags: ["nature", "mindfulness", "free", "outdoor"],
     online: false, vendorInvite: false, showVendors: false, vendorDeadline: "", vendorInfo: "", profitModel: "vendor-keeps", hostPct: 0,
     waitlist: [],
     ticketTiers: [
-      { id: "t1", name: "General Admission", price: 0, capacity: 40, sold: 34, description: "Free — limited to 40 participants" },
+      { id: "t1", name: "General Admission", price: 0, capacity: 40, sold: 34, description: "Free &mdash; limited to 40 participants" },
     ],
     vendors: [],
   },
@@ -226,7 +226,7 @@ const INITIAL_EVENTS = [
 const EMPTY_VENDOR_APP = {
   businessName: "", contactName: "", email: "", phone: "", city: "", state: "",
   vendorType: "Produce & Vegetables", otherType: "",
-  description: "", spaceNeeded: "Small – 3 ft table", yearsInBusiness: "",
+  description: "", spaceNeeded: "Small &ndash; 3 ft table", yearsInBusiness: "",
   hasPermit: false, electricNeeded: false, tentOwned: false,
   boothNeighborPref: "", website: "", instagram: "", comments: "", photo: null,
   d1: false, d2: false, d3: false, d4: false, d5: false,
@@ -280,7 +280,7 @@ const fmtTime = (t) => {
 const dateRange = (ev) => {
   if (!ev.startDate) return "";
   if (!ev.endDate || ev.startDate === ev.endDate) return fmt(ev.startDate);
-  return `${fmtShort(ev.startDate)} – ${fmt(ev.endDate)}`;
+  return `${fmtShort(ev.startDate)} &ndash; ${fmt(ev.endDate)}`;
 };
 const multiDay = (ev) => ev.endDate && ev.endDate !== ev.startDate;
 const isExpired = (ev) => {
@@ -616,7 +616,7 @@ function AppProvider({ children }) {
         // Restore session
         const { data: { user } } = supabase.auth.getUser();
         if (user) {
-          // Try to load profile — fall back to user metadata if RLS causes issues
+          // Try to load profile &mdash; fall back to user metadata if RLS causes issues
           try {
             const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
             if (profile) {
@@ -790,7 +790,7 @@ function AppProvider({ children }) {
         const now = new Date();
         const daysUntil = eventDate ? Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24)) : 999;
         if (daysUntil >= deadlineDays) {
-          refundMessage = `A full refund will be processed in 5–7 business days.`;
+          refundMessage = `A full refund will be processed in 5&ndash;7 business days.`;
         } else {
           refundMessage = `The refund window (${deadlineDays} days before event) has passed. No refund will be issued.`;
         }
@@ -799,12 +799,12 @@ function AppProvider({ children }) {
         const now = new Date();
         const daysUntil = eventDate ? Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24)) : 999;
         if (daysUntil >= deadlineDays) {
-          refundMessage = `A partial refund will be processed in 5–7 business days.`;
+          refundMessage = `A partial refund will be processed in 5&ndash;7 business days.`;
         } else {
           refundMessage = `The refund window (${deadlineDays} days before event) has passed. No refund will be issued.`;
         }
       } else {
-        refundMessage = "No refund will be issued — this event is rain or shine, no refunds.";
+        refundMessage = "No refund will be issued &mdash; this event is rain or shine, no refunds.";
       }
     }
     await supabase.from("tickets").update({ status: "cancelled" }).eq("id", ticket.id);
@@ -812,7 +812,7 @@ function AppProvider({ children }) {
     const { data: freshTier } = await supabase.from("ticket_tiers").select("sold").eq("id", ticket.tierId).single();
     const newSold = Math.max(0, (freshTier?.sold ?? 0) - ticket.qty);
     await supabase.from("ticket_tiers").update({ sold: newSold }).eq("id", ticket.tierId);
-    // Auto-promote first waitlist entry — send a real email via Resend if configured
+    // Auto-promote first waitlist entry &mdash; send a real email via Resend if configured
     const { data: waitlistEntries } = await supabase.from("waitlist").select("*").eq("event_id", ticket.eventId).order("created_at", { ascending: true }).limit(1);
     if (waitlistEntries && waitlistEntries.length > 0) {
       const first = waitlistEntries[0];
@@ -826,7 +826,7 @@ function AppProvider({ children }) {
             body: JSON.stringify({
               from: "New Harmony Life <tickets@newharmonylife.com>",
               to: [first.email],
-              subject: `A spot just opened up — ${ev.title}`,
+              subject: `A spot just opened up &mdash; ${ev.title}`,
               html: `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
   <div style="background:#1C2B1A;padding:28px 32px;text-align:center">
@@ -835,7 +835,7 @@ function AppProvider({ children }) {
   </div>
   <div style="padding:28px 32px">
     <h2 style="color:#1C2B1A;margin:0 0 8px">Good news, ${first.name?.split(" ")[0] || "there"}! 🎉</h2>
-    <p style="color:#6B7280;margin:0 0 20px;line-height:1.6">A spot has just opened up for <strong>${ev.title}</strong> on ${fmt(ev.startDate)}. As the next person on the waitlist, you have first priority — grab your ticket before it's gone!</p>
+    <p style="color:#6B7280;margin:0 0 20px;line-height:1.6">A spot has just opened up for <strong>${ev.title}</strong> on ${fmt(ev.startDate)}. As the next person on the waitlist, you have first priority &mdash; grab your ticket before it's gone!</p>
     <div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:16px 20px;margin-bottom:20px">
       <div style="color:#166534;font-weight:700;font-size:0.9rem;margin-bottom:4px">📍 ${ev.location}</div>
       <div style="color:#4B7C5A;font-size:0.85rem">${dateRange(ev)}${ev.time ? " · " + fmtTime(ev.time) : ""}</div>
@@ -851,10 +851,10 @@ function AppProvider({ children }) {
           showToast(`✉️ Waitlist email sent to ${first.name}!`);
         } catch (emailErr) {
           console.warn("Waitlist email failed (non-fatal):", emailErr);
-          showToast(`⚠️ Waitlist email failed for ${first.name} — notify them manually.`, "warn");
+          showToast(`⚠️ Waitlist email failed for ${first.name} &mdash; notify them manually.`, "warn");
         }
       } else {
-        showToast(`✉️ ${first.name} is next on the waitlist — notify them manually if Resend isn't configured.`);
+        showToast(`✉️ ${first.name} is next on the waitlist &mdash; notify them manually if Resend isn't configured.`);
       }
     }
     setMyTickets(prev => prev.map(t => t.ticketId === ticketId ? { ...t, status: "cancelled" } : t));
@@ -865,7 +865,7 @@ function AppProvider({ children }) {
   const checkinAttendee = async (evId, ticketId) => {
     const now = new Date().toISOString();
     await supabase.from("tickets").update({ checked_in: true, checkin_time: now }).eq("id", ticketId);
-    // ticketId here is the UUID row id — match against t.id (not t.ticketId which is TKT-xxx)
+    // ticketId here is the UUID row id &mdash; match against t.id (not t.ticketId which is TKT-xxx)
     setMyTickets(prev => prev.map(t => t.id === ticketId ? { ...t, checkedIn: true, checkinTime: new Date().toLocaleTimeString() } : t));
     showToast("✅ Attendee checked in!");
   };
@@ -955,7 +955,7 @@ function AppProvider({ children }) {
     showToast("Profile updated ✓");
   };
 
-  // ─── SOCIAL — REVIEWS ──────────────────────────────────────────────────────
+  // ─── SOCIAL &mdash; REVIEWS ──────────────────────────────────────────────────────
   const loadReviews = async (eventId) => {
     const { data } = await supabase.from("reviews").select("*").eq("event_id", eventId).order("created_at", { ascending: false });
     if (data) setReviews(prev => ({ ...prev, [eventId]: data.map(r => ({ id: r.id, userId: r.user_id, userName: r.user_name, rating: r.rating, text: r.review_text, createdAt: r.created_at })) }));
@@ -973,7 +973,7 @@ function AppProvider({ children }) {
     showToast("Review removed.", "warn");
   };
 
-  // ─── SOCIAL — Q&A ──────────────────────────────────────────────────────────
+  // ─── SOCIAL &mdash; Q&A ──────────────────────────────────────────────────────────
   const loadQA = async (eventId) => {
     const { data } = await supabase.from("event_qa").select("*").eq("event_id", eventId).order("created_at", { ascending: true });
     if (data) setQaItems(prev => ({ ...prev, [eventId]: data.map(q => ({ id: q.id, userId: q.user_id, userName: q.user_name, question: q.question, answer: q.answer, createdAt: q.created_at, answeredAt: q.answered_at })) }));
@@ -995,7 +995,7 @@ function AppProvider({ children }) {
     await loadQA(eventId);
   };
 
-  // ─── SOCIAL — INTEREST (Going / Interested) ────────────────────────────────
+  // ─── SOCIAL &mdash; INTEREST (Going / Interested) ────────────────────────────────
   const toggleInterest = (eventId, type) => {
     if (!currentUser) { showToast("Sign in to mark your interest", "warn"); return; }
     const uid = currentUser.id;
@@ -1017,7 +1017,7 @@ function AppProvider({ children }) {
   };
   const getInterest = (eventId) => interests[eventId] || { going: [], interested: [] };
 
-  // ─── SOCIAL — FOLLOW ORGANIZER ─────────────────────────────────────────────
+  // ─── SOCIAL &mdash; FOLLOW ORGANIZER ─────────────────────────────────────────────
   const toggleFollow = (organizer) => {
     if (!currentUser) { showToast("Sign in to follow organizers", "warn"); return; }
     setFollowing(prev => {
@@ -1029,7 +1029,7 @@ function AppProvider({ children }) {
     });
   };
 
-  // ─── SOCIAL — REFERRAL LINK ────────────────────────────────────────────────
+  // ─── SOCIAL &mdash; REFERRAL LINK ────────────────────────────────────────────────
   const getReferralLink = (eventId) => {
     const base = window.location.href.split("?")[0].split("#")[0];
     const ref = currentUser ? btoa(currentUser.id).replace(/=/g, "").slice(0, 8) : "share";
@@ -1056,7 +1056,7 @@ function AppProvider({ children }) {
     return (referralStats[eventId] || {})[ref] || 0;
   };
 
-  // ─── PRIVATE EVENT — INVITE LINK ──────────────────────────────────────────
+  // ─── PRIVATE EVENT &mdash; INVITE LINK ──────────────────────────────────────────
   const getInviteLink = (ev) => {
     if (!ev?.inviteToken) return null;
     const base = window.location.href.split("?")[0].split("#")[0];
@@ -1179,7 +1179,7 @@ function AppProvider({ children }) {
       try { new Notification(title, { body, icon: "/favicon.ico", tag }); } catch (e) {}
     }
   };
-  // Check reminders on load — fire local notifs for upcoming events user is registered for
+  // Check reminders on load &mdash; fire local notifs for upcoming events user is registered for
   useEffect(() => {
     if (!currentUser || myTickets.length === 0) return;
     const today = new Date();
@@ -1202,7 +1202,7 @@ function AppProvider({ children }) {
     });
   }, [myTickets, events, currentUser]);
 
-  // ─── EVENT DUPLICATION — handled in handleSave/startEdit section below ──────
+  // ─── EVENT DUPLICATION &mdash; handled in handleSave/startEdit section below ──────
 
   // ─── SCHEDULED REMINDERS via Resend ─────────────────────────────────────────
   const scheduleEventReminders = async (eventId) => {
@@ -1242,7 +1242,7 @@ function AppProvider({ children }) {
       // Send 1-week reminder
       for (const t of uniqueEmails) {
         try {
-          await fetch("https://api.resend.com/emails", { method: "POST", headers: { "Authorization": `Bearer ${rKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: "New Harmony Life <tickets@newharmonylife.com>", to: [t.buyer_email], subject: `⏰ 1 week away — ${ev.title}`, html: makeReminderHtml(t.buyer_name?.split(" ")[0] || "there", "1 week away") }) });
+          await fetch("https://api.resend.com/emails", { method: "POST", headers: { "Authorization": `Bearer ${rKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: "New Harmony Life <tickets@newharmonylife.com>", to: [t.buyer_email], subject: `⏰ 1 week away &mdash; ${ev.title}`, html: makeReminderHtml(t.buyer_name?.split(" ")[0] || "there", "1 week away") }) });
           sent++;
         } catch (e) { console.warn("Reminder email failed:", e); }
       }
@@ -1250,16 +1250,16 @@ function AppProvider({ children }) {
       // Send 1-day reminder  
       for (const t of uniqueEmails) {
         try {
-          await fetch("https://api.resend.com/emails", { method: "POST", headers: { "Authorization": `Bearer ${rKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: "New Harmony Life <tickets@newharmonylife.com>", to: [t.buyer_email], subject: `🌿 Tomorrow — ${ev.title}`, html: makeReminderHtml(t.buyer_name?.split(" ")[0] || "there", "Tomorrow") }) });
+          await fetch("https://api.resend.com/emails", { method: "POST", headers: { "Authorization": `Bearer ${rKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: "New Harmony Life <tickets@newharmonylife.com>", to: [t.buyer_email], subject: `🌿 Tomorrow &mdash; ${ev.title}`, html: makeReminderHtml(t.buyer_name?.split(" ")[0] || "there", "Tomorrow") }) });
           sent++;
         } catch (e) { console.warn("Reminder email failed:", e); }
       }
     }
     if (sent > 0) showToast(`📧 Reminders sent to ${sent} attendee${sent !== 1 ? "s" : ""}!`);
-    else showToast("No reminders sent — check timing and Resend key.", "warn");
+    else showToast("No reminders sent &mdash; check timing and Resend key.", "warn");
   };
 
-  // ─── PWA — Service Worker & Install ────────────────────────────────────────
+  // ─── PWA &mdash; Service Worker & Install ────────────────────────────────────────
   useEffect(() => {
     // Install prompt listener
     const onInstallPrompt = e => { e.preventDefault(); setInstallPrompt(e); };
@@ -1327,7 +1327,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       const found = events.find(e => e.id === evId || String(e.id) === evId);
       if (found) { setSelectedId(found.id); setView("detail"); }
     }
-    // Invite token deep link — find the matching private event and open it
+    // Invite token deep link &mdash; find the matching private event and open it
     if (events.length > 0 && window.__nhInviteToken) {
       const token = window.__nhInviteToken;
       window.__nhInviteToken = null;
@@ -1412,7 +1412,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
 
       const orderId = fetchedOrder.id;
 
-      // Create ticket records — one per cart item
+      // Create ticket records &mdash; one per cart item
       const ticketInserts = cart.map(item => ({
         ticket_id: genTicketId(),
         order_id: orderId,
@@ -1431,7 +1431,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         checked_in: false,
       }));
 
-      // Use raw fetch for ticket insert — bypasses custom client quirks
+      // Use raw fetch for ticket insert &mdash; bypasses custom client quirks
       const sessionToken = supabase.getSession()?.access_token || SUPABASE_ANON_KEY;
       const ticketRes = await fetch(`${SUPABASE_URL}/rest/v1/tickets`, {
         method: "POST",
@@ -1493,7 +1493,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       if (rKey && checkoutInfo.email) {
         try {
           const itemsList = cart.map(item =>
-            `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${item.event.title} — ${item.tier.name} x${item.qty}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right">${item.tier.price === 0 ? "Free" : "$" + (item.tier.price * item.qty).toFixed(2)}</td></tr>`
+            `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${item.event.title} &mdash; ${item.tier.name} x${item.qty}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right">${item.tier.price === 0 ? "Free" : "$" + (item.tier.price * item.qty).toFixed(2)}</td></tr>`
           ).join("");
           const emailHtml = `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
@@ -1521,7 +1521,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
             body: JSON.stringify({
               from: "New Harmony Life <tickets@newharmonylife.com>",
               to: [checkoutInfo.email],
-              subject: `Your tickets for ${cart[0]?.event?.title || "the event"} — ${orderNum}`,
+              subject: `Your tickets for ${cart[0]?.event?.title || "the event"} &mdash; ${orderNum}`,
               html: emailHtml,
             }),
           });
@@ -1611,7 +1611,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
             const uniqueEmails = [...new Map(allTickets.map(t => [t.buyer_email, t])).values()];
             let notified = 0;
             const changeLines = [];
-            if (dateChanged) changeLines.push(`<li style="margin-bottom:6px">📅 <strong>New date/time:</strong> ${fmt(form.startDate)}${form.endDate && form.endDate !== form.startDate ? ` – ${fmt(form.endDate)}` : ""}${form.time ? ` at ${fmtTime(form.time)}` : ""}</li>`);
+            if (dateChanged) changeLines.push(`<li style="margin-bottom:6px">📅 <strong>New date/time:</strong> ${fmt(form.startDate)}${form.endDate && form.endDate !== form.startDate ? ` &ndash; ${fmt(form.endDate)}` : ""}${form.time ? ` at ${fmtTime(form.time)}` : ""}</li>`);
             if (locationChanged) changeLines.push(`<li style="margin-bottom:6px">📍 <strong>New location:</strong> ${form.location}${form.address ? `, ${form.address}` : ""}</li>`);
             for (const ticket of uniqueEmails) {
               try {
@@ -1621,7 +1621,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
                   body: JSON.stringify({
                     from: "New Harmony Life <tickets@newharmonylife.com>",
                     to: [ticket.buyer_email],
-                    subject: `Important update — ${form.title}`,
+                    subject: `Important update &mdash; ${form.title}`,
                     html: `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
   <div style="background:#1C2B1A;padding:28px 32px;text-align:center">
@@ -1659,7 +1659,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
           .order("created_at", { ascending: true });
 
         if (waitlistEntries && waitlistEntries.length > 0) {
-          // Email everyone on the waitlist — spots are first-come-first-served
+          // Email everyone on the waitlist &mdash; spots are first-come-first-served
           const rKey = localStorage.getItem("nh_resend_key");
           const toNotify = waitlistEntries; // all of them
           let emailsSent = 0;
@@ -1674,7 +1674,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
                   body: JSON.stringify({
                     from: "New Harmony Life <tickets@newharmonylife.com>",
                     to: [person.email],
-                    subject: `Spots just opened up — ${form.title}`,
+                    subject: `Spots just opened up &mdash; ${form.title}`,
                     html: `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
   <div style="background:#1C2B1A;padding:28px 32px;text-align:center">
@@ -1685,7 +1685,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     <h2 style="color:#1C2B1A;margin:0 0 8px">Great news, ${person.name?.split(" ")[0] || "there"}! 🎉</h2>
     <p style="color:#6B7280;margin:0 0 20px;line-height:1.6">
       <strong>${spotsOpened} new spot${spotsOpened !== 1 ? "s have" : " has"} opened up</strong> for <strong>${form.title}</strong>.
-      All ${toNotify.length} waitlisted ${toNotify.length !== 1 ? "people are" : "person is"} being notified at the same time — it's first come, first served, so grab your ticket soon!
+      All ${toNotify.length} waitlisted ${toNotify.length !== 1 ? "people are" : "person is"} being notified at the same time &mdash; it's first come, first served, so grab your ticket soon!
     </p>
     <div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:16px 20px;margin-bottom:20px">
       <div style="color:#166534;font-weight:700;font-size:0.9rem;margin-bottom:4px">📍 ${form.location}</div>
@@ -1704,10 +1704,10 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
                 console.warn(`Waitlist email failed for ${person.email}:`, emailErr);
               }
             }
-            showToast(`✉️ ${emailsSent} waitlist ${emailsSent !== 1 ? "emails" : "email"} sent — ${spotsOpened} new spot${spotsOpened !== 1 ? "s" : ""} opened!`);
+            showToast(`✉️ ${emailsSent} waitlist ${emailsSent !== 1 ? "emails" : "email"} sent &mdash; ${spotsOpened} new spot${spotsOpened !== 1 ? "s" : ""} opened!`);
           } else {
-            // No Resend key — tell the admin how many people to contact manually
-            showToast(`⚠️ ${spotsOpened} spot${spotsOpened !== 1 ? "s" : ""} opened — notify ${toNotify.length} waitlisted ${toNotify.length !== 1 ? "people" : "person"} manually (no Resend key set).`, "warn");
+            // No Resend key &mdash; tell the admin how many people to contact manually
+            showToast(`⚠️ ${spotsOpened} spot${spotsOpened !== 1 ? "s" : ""} opened &mdash; notify ${toNotify.length} waitlisted ${toNotify.length !== 1 ? "people" : "person"} manually (no Resend key set).`, "warn");
           }
         }
       }
@@ -2008,7 +2008,7 @@ function EventPhotoGallery({ eventId }) {
             <div style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.82rem", marginTop: "12px" }}>
               {photos[lightbox]?.caption && <div style={{ marginBottom: "4px" }}>{photos[lightbox].caption}</div>}
               <div>By {photos[lightbox]?.uploadedBy} · {photos[lightbox]?.uploadedAt ? new Date(photos[lightbox].uploadedAt).toLocaleDateString() : ""}</div>
-              <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", marginTop: "4px" }}>{lightbox + 1} / {photos.length} — click outside to close</div>
+              <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", marginTop: "4px" }}>{lightbox + 1} / {photos.length} &mdash; click outside to close</div>
             </div>
           </div>
           <button onClick={e => { e.stopPropagation(); setLightbox(l => (l < photos.length - 1 ? l + 1 : 0)); }}
@@ -2290,7 +2290,7 @@ function TermsModal({ onClose }) {
             },
             {
               heading: "3. Your Account",
-              body: "You are responsible for keeping your login credentials secure and for all activity under your account. You must be 13 years of age or older to create an account. Please provide accurate information when registering — we use it to send you ticket confirmations and event updates.",
+              body: "You are responsible for keeping your login credentials secure and for all activity under your account. You must be 13 years of age or older to create an account. Please provide accurate information when registering &mdash; we use it to send you ticket confirmations and event updates.",
             },
             {
               heading: "4. Tickets & Purchases",
@@ -2302,7 +2302,7 @@ function TermsModal({ onClose }) {
             },
             {
               heading: "6. Acceptable Use",
-              body: "You agree not to misuse the Service — including attempting to circumvent capacity limits, submitting false registrations, harassing other community members, or using the platform for unlawful purposes. We reserve the right to suspend accounts that violate these terms.",
+              body: "You agree not to misuse the Service &mdash; including attempting to circumvent capacity limits, submitting false registrations, harassing other community members, or using the platform for unlawful purposes. We reserve the right to suspend accounts that violate these terms.",
             },
             {
               heading: "7. Privacy & Your Data",
@@ -2554,7 +2554,7 @@ function VendorModal() {
                     </div>
                   ))}
                 </div>
-                {allAgreed && <div style={{ marginTop: "12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "10px 14px", color: T.green1, fontSize: "0.82rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>✅ All agreements accepted — you're ready to submit!</div>}
+                {allAgreed && <div style={{ marginTop: "12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "10px 14px", color: T.green1, fontSize: "0.82rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>✅ All agreements accepted &mdash; you're ready to submit!</div>}
               </div>
               <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", paddingBottom: "0.5rem" }}>
                 {!allAgreed && (
@@ -2606,7 +2606,7 @@ function CalendarEventModal() {
             {registered
               ? <div style={{ flex: 1, background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "13px", textAlign: "center", minWidth: "120px" }}><div style={{ color: T.green1, fontWeight: 700, fontSize: "0.9rem" }}>✅ You're registered!</div></div>
               : inCart
-              ? <button onClick={() => { setCalendarModal(null); setCartOpen(true); }} style={{ flex: 1, background: T.earth, color: "#fff", border: "none", borderRadius: "12px", padding: "13px", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minWidth: "120px" }}>In Cart — View Cart 🛒</button>
+              ? <button onClick={() => { setCalendarModal(null); setCartOpen(true); }} style={{ flex: 1, background: T.earth, color: "#fff", border: "none", borderRadius: "12px", padding: "13px", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minWidth: "120px" }}>In Cart &mdash; View Cart 🛒</button>
               : full
               ? <button disabled style={{ flex: 1, background: T.cream, color: T.stoneL, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "13px", fontSize: "0.9rem", cursor: "not-allowed", fontFamily: "inherit", minWidth: "120px" }}>Sold Out</button>
               : <button onClick={() => { const tier = ev.ticketTiers?.[0]; addToCart(ev, 1, tier); setCalendarModal(null); }} style={{ flex: 1, background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "13px", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minWidth: "120px" }}>{(ev.ticketTiers?.[0]?.price ?? 0) === 0 ? "Register Free 🌿" : "Add to Cart 🛒"}</button>
@@ -2638,7 +2638,7 @@ function PhotoCarousel({ photos, color }) {
 }
 
 // ─── TIER PICKER POPOVER ──────────────────────────────────────────────────────
-// Shown when "Add to Cart" is clicked on an EventCard — mirrors the detail view's
+// Shown when "Add to Cart" is clicked on an EventCard &mdash; mirrors the detail view's
 // tier selector layout so the experience is consistent.
 function TierPickerPopover({ ev, onClose }) {
   const { addToCart } = useApp();
@@ -2678,7 +2678,7 @@ function TierPickerPopover({ ev, onClose }) {
         <button onClick={onClose} style={{ background: "none", border: "none", color: T.stoneL, cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: "0 2px" }}>✕</button>
       </div>
 
-      {/* Tier list — same style as DetailView sidebar */}
+      {/* Tier list &mdash; same style as DetailView sidebar */}
       <div style={{ display: "grid", gap: "8px", marginBottom: "14px" }}>
         {tiers.map(tier => {
           const isFull = eventSpotsLeft === 0;
@@ -2768,7 +2768,7 @@ function EventCard({ ev }) {
         <div style={{ height: "150px", position: "relative", overflow: "hidden" }}>
           {fp ? <img src={fp} alt={ev.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ height: "100%", background: `linear-gradient(135deg,${ev.color}22,${ev.color}66)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3rem" }}>{catEmoji(ev.category)}</div>}
           <div style={{ position: "absolute", top: "10px", left: "10px", background: ev.isPrivate ? "#6B3FA0" : ev.color, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.isPrivate ? "🔒 Private" : "Public"}</div>
-          {/* Interest heart — top right */}
+          {/* Interest heart &mdash; top right */}
           <button onClick={e => { e.stopPropagation(); toggleInterest(ev.id, isInterested ? "interested" : isGoing ? "going" : "interested"); }}
             title={isGoing ? "Going!" : isInterested ? "Interested" : "Mark interest"}
             style={{ position: "absolute", top: "8px", right: "8px", width: "34px", height: "34px", borderRadius: "50%", background: (isGoing || isInterested) ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.35)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", backdropFilter: "blur(4px)", transition: "transform 0.15s, background 0.15s", zIndex: 2 }}
@@ -2833,7 +2833,7 @@ function EventCard({ ev }) {
         {registered
           ? <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px", textAlign: "center", color: T.green1, fontSize: "0.8rem", fontWeight: 700 }}>✓ Registered</div>
           : anyInCart
-          ? <button onClick={e => { e.stopPropagation(); setCartOpen(true); }} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart — View Cart 🛒</button>
+          ? <button onClick={e => { e.stopPropagation(); setCartOpen(true); }} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart &mdash; View Cart 🛒</button>
           : full
           ? <button onClick={e => { e.stopPropagation(); joinWaitlist(ev.id); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.gold},#C8940F)`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>🔔 Join Waitlist</button>
           : <button onClick={e => { e.stopPropagation(); setPickerOpen(true); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{lowestPrice === 0 ? "Register Free 🌿" : "Add to Cart 🛒"}</button>
@@ -3021,7 +3021,7 @@ function DiscoverView() {
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: `${T.green3}20`, border: `1px solid ${T.green3}40`, borderRadius: "100px", padding: "6px 18px", fontSize: "0.8rem", color: T.green4, fontWeight: 600, marginBottom: "1.5rem", letterSpacing: "0.06em" }}><span>🌱</span> COMMUNITY · NATURE · CELEBRATION</div>
           <h1 style={{ color: "#fff", fontFamily: "'Lora',serif", fontSize: "clamp(2rem,5vw,3.2rem)", fontWeight: 700, margin: "0 0 1rem", letterSpacing: "-0.02em", lineHeight: 1.15 }}>Gather. Grow.<br /><span style={{ background: `linear-gradient(135deg,${T.green3},${T.earthL})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Belong Together.</span></h1>
-          <p style={{ color: "#9CA3AF", fontSize: "1.05rem", maxWidth: "480px", margin: "0 auto 2.5rem", lineHeight: 1.7 }}>Discover events rooted in community, nature, and shared joy — right here in the heartland.</p>
+          <p style={{ color: "#9CA3AF", fontSize: "1.05rem", maxWidth: "480px", margin: "0 auto 2.5rem", lineHeight: 1.7 }}>Discover events rooted in community, nature, and shared joy &mdash; right here in the heartland.</p>
           <div style={{ maxWidth: "540px", margin: "0 auto", position: "relative" }}>
             <span style={{ position: "absolute", left: "16px", top: "50%", transform: "translateY(-50%)", fontSize: "1rem", pointerEvents: "none", zIndex: 1 }}>🔍</span>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search events, venues, topics..." style={{ width: "100%", padding: "14px 44px 14px 46px", background: "rgba(255,255,255,0.12)", border: `1px solid ${T.green3}40`, borderRadius: "14px", color: "#fff", fontSize: "0.9rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit" }} />
@@ -3169,7 +3169,7 @@ function ReviewsSection({ ev }) {
       )}
 
       {evReviews.length === 0
-        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "2rem 0" }}>No reviews yet — be the first to share your experience!</div>
+        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "2rem 0" }}>No reviews yet &mdash; be the first to share your experience!</div>
         : <div style={{ display: "grid", gap: "12px" }}>
             {evReviews.map(r => (
               <div key={r.id} style={{ background: T.cream, borderRadius: "12px", padding: "14px 16px", border: `1px solid ${T.border}` }}>
@@ -3248,7 +3248,7 @@ function QASection({ ev }) {
       </div>
 
       {evQA.length === 0
-        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "1.5rem 0" }}>No questions yet — ask away!</div>
+        ? <div style={{ color: T.stoneL, fontSize: "0.88rem", textAlign: "center", padding: "1.5rem 0" }}>No questions yet &mdash; ask away!</div>
         : <div style={{ display: "grid", gap: "12px" }}>
             {[...unanswered, ...answered].map(q => (
               <div key={q.id} style={{ background: T.cream, borderRadius: "12px", padding: "14px 16px", border: `1px solid ${T.border}` }}>
@@ -3305,7 +3305,7 @@ function DetailView() {
   const urlToken = new URLSearchParams(window.location.search).get("invite");
   const tokenValid = ev.inviteToken && urlToken && ev.inviteToken === urlToken;
 
-  // Private event gate — bypass if valid invite token
+  // Private event gate &mdash; bypass if valid invite token
   if (ev.isPrivate && !tokenValid && !privateUnlocked) {
     // If there's a password, show password form; if invite-only (no password), show locked message
     return (
@@ -3315,7 +3315,7 @@ function DetailView() {
           <h2 style={{ color: T.text, fontFamily: "'Lora',serif", margin: "0 0 0.5rem" }}>Private Event</h2>
           {ev.privatePassword ? (
             <>
-              <p style={{ color: T.textSoft, marginBottom: "1.5rem", fontSize: "0.9rem" }}>This event requires a password — or an invite link from the organizer.</p>
+              <p style={{ color: T.textSoft, marginBottom: "1.5rem", fontSize: "0.9rem" }}>This event requires a password &mdash; or an invite link from the organizer.</p>
               <PasswordInput
                 value={privateInput}
                 onChange={e => { setPrivateInput(e.target.value); setPrivateError(false); }}
@@ -3370,7 +3370,7 @@ function DetailView() {
               🔁 {getRecurringDescription(ev)}
             </div>
           )}
-          {/* Social action bar — interest, follow, share, calendar */}
+          {/* Social action bar &mdash; interest, follow, share, calendar */}
           {(() => {
             const intr = getInterest(ev.id);
             const isGoing = currentUser && intr.going.includes(currentUser.id);
@@ -3399,7 +3399,7 @@ function DetailView() {
             );
           })()}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: "14px", marginBottom: "2rem" }}>
-            {[["📅 Dates & Time", multiDay(ev) ? `${fmt(ev.startDate)} –\n${fmt(ev.endDate)}\n${fmtTime(ev.time)} – ${fmtTime(ev.endTime)}` : `${fmt(ev.startDate)}\n${fmtTime(ev.time)} – ${fmtTime(ev.endTime)}`], ["📍 Location", ev.online ? "Online Event" : `${ev.location}${ev.address ? "\n" + ev.address : ""}`], ["👤 Organizer", ev.organizer]].map(([label, val]) => (
+            {[["📅 Dates & Time", multiDay(ev) ? `${fmt(ev.startDate)} &ndash;\n${fmt(ev.endDate)}\n${fmtTime(ev.time)} &ndash; ${fmtTime(ev.endTime)}` : `${fmt(ev.startDate)}\n${fmtTime(ev.time)} &ndash; ${fmtTime(ev.endTime)}`], ["📍 Location", ev.online ? "Online Event" : `${ev.location}${ev.address ? "\n" + ev.address : ""}`], ["👤 Organizer", ev.organizer]].map(([label, val]) => (
               <div key={label} style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "14px" }}>
                 <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
                 <div style={{ color: T.textMid, fontSize: "0.875rem", whiteSpace: "pre-line", lineHeight: 1.5 }}>{val}</div>
@@ -3451,7 +3451,7 @@ function DetailView() {
 
         </div>
 
-        {/* Sticky sidebar — ticket tiers + waitlist */}
+        {/* Sticky sidebar &mdash; ticket tiers + waitlist */}
         <div style={{ flex: "0 0 300px", background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px", position: "sticky", top: "80px", boxShadow: `0 4px 24px rgba(44,106,79,0.1)` }}>
           {/* Tier selector */}
           {!registered && (
@@ -3531,7 +3531,7 @@ function DetailView() {
               )}
             </div>
           ) : isInCart(ev.id, selectedTier?.id) ? (
-            <button onClick={() => setCartOpen(true)} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart — View Cart 🛒</button>
+            <button onClick={() => setCartOpen(true)} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart &mdash; View Cart 🛒</button>
           ) : selectedTier ? (
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
@@ -3587,7 +3587,7 @@ function PaymentStep() {
     if (!window.paypal) return;
     window.paypal.Buttons({
       style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal", height: 48 },
-      createOrder: (data, actions) => actions.order.create({ purchase_units: [{ amount: { value: cartTotal.toFixed(2), currency_code: "USD" }, description: "New Harmony Life — Event Tickets" }] }),
+      createOrder: (data, actions) => actions.order.create({ purchase_units: [{ amount: { value: cartTotal.toFixed(2), currency_code: "USD" }, description: "New Harmony Life &mdash; Event Tickets" }] }),
       onApprove: (data, actions) => actions.order.capture().then(() => {
         setProcessing(true);
         setTimeout(() => {
@@ -3618,7 +3618,7 @@ function PaymentStep() {
           setCart([]); setCheckoutStep(3); setProcessing(false);
         }, 1200);
       }),
-      onError: err => { console.error("PayPal error", err); showToast("PayPal error — please try again", "warn"); },
+      onError: err => { console.error("PayPal error", err); showToast("PayPal error &mdash; please try again", "warn"); },
     }).render(container);
     setPpRendered(true);
   };
@@ -3782,7 +3782,7 @@ function CheckoutView() {
                     <h2 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.25rem", margin: "0 0 1rem" }}>Confirm Registration</h2>
                     <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "12px", padding: "16px", marginBottom: "1.5rem" }}>
                       <div style={{ color: T.green1, fontWeight: 700, marginBottom: "4px" }}>🎉 All tickets in your cart are free!</div>
-                      <div style={{ color: T.textSoft, fontSize: "0.85rem" }}>No payment needed — click below to confirm your registration.</div>
+                      <div style={{ color: T.textSoft, fontSize: "0.85rem" }}>No payment needed &mdash; click below to confirm your registration.</div>
                     </div>
                     <div style={{ display: "flex", gap: "10px" }}>
                       <button onClick={() => setCheckoutStep(1)} style={{ background: T.green5, color: T.textSoft, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "12px 20px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>← Back</button>
@@ -3859,14 +3859,14 @@ function CreateView() {
   const { form, setForm, formErrors, editingId, setEditingId, setView, handleSave, handlePhotoAdd, removePhoto, fileRef, dashUnlocked } = useApp();
   const hasChanges = form.title.trim() || form.description.trim() || form.location.trim();
 
-  // Warn on browser back/close too — must be before any early returns
+  // Warn on browser back/close too &mdash; must be before any early returns
   useEffect(() => {
     const handler = (e) => { if (hasChanges) { e.preventDefault(); e.returnValue = ""; } };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasChanges]);
 
-  // Access guard — only admins can create/edit events
+  // Access guard &mdash; only admins can create/edit events
   if (!dashUnlocked) {
     return (
       <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
@@ -3947,7 +3947,7 @@ function CreateView() {
           </section>
           <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px" }}>
             <h3 style={{ color: T.green1, margin: "0 0 4px", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Tickets & Capacity</h3>
-            <p style={{ color: T.textSoft, fontSize: "0.8rem", margin: "0 0 20px", lineHeight: 1.5 }}>Set one total capacity for the event — this is the maximum number of attendees across all ticket types combined. Then add one or more pricing tiers (e.g. Early Bird, General, VIP).</p>
+            <p style={{ color: T.textSoft, fontSize: "0.8rem", margin: "0 0 20px", lineHeight: 1.5 }}>Set one total capacity for the event &mdash; this is the maximum number of attendees across all ticket types combined. Then add one or more pricing tiers (e.g. Early Bird, General, VIP).</p>
             <div style={{ display: "grid", gap: "16px" }}>
 
               {/* ── Single total capacity ── */}
@@ -3969,7 +3969,7 @@ function CreateView() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
                   <div>
                     <label style={{ color: T.textSoft, fontSize: "0.82rem", fontWeight: 600 }}>Pricing Tiers</label>
-                    <div style={{ color: T.stoneL, fontSize: "0.74rem", marginTop: "1px" }}>Each tier shares the total capacity above — any mix of ticket types can be sold up to that limit.</div>
+                    <div style={{ color: T.stoneL, fontSize: "0.74rem", marginTop: "1px" }}>Each tier shares the total capacity above &mdash; any mix of ticket types can be sold up to that limit.</div>
                   </div>
                   <button type="button" onClick={() => setForm(f => ({ ...f, ticketTiers: [...(f.ticketTiers || []), { id: "t" + Date.now(), name: "", price: 0, capacity: parseInt(f.capacity) || 50, sold: 0, description: "" }] }))} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "5px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem", flexShrink: 0, marginLeft: "12px" }}>+ Add Tier</button>
                 </div>
@@ -4095,7 +4095,7 @@ function CreateView() {
             <p style={{ color: T.textSoft, fontSize: "0.83rem", margin: "0 0 16px", lineHeight: 1.55 }}>Choose what happens when an attendee cancels their ticket.</p>
             <div style={{ display: "grid", gap: "10px" }}>
               {[
-                { value: "none", emoji: "☀️", label: "Rain or Shine — No Refunds", desc: "All sales are final. No refunds under any circumstances." },
+                { value: "none", emoji: "☀️", label: "Rain or Shine &mdash; No Refunds", desc: "All sales are final. No refunds under any circumstances." },
                 { value: "partial", emoji: "♻️", label: "Partial Refund Window", desc: "Refunds allowed up to a set number of days before the event." },
                 { value: "full", emoji: "✅", label: "Full Refund Window", desc: "Full refund allowed up to a set number of days before the event." },
               ].map(opt => (
@@ -4114,7 +4114,7 @@ function CreateView() {
             </div>
             {(form.refundPolicy === "partial" || form.refundPolicy === "full") && (
               <div style={{ marginTop: "14px", paddingTop: "14px", borderTop: `1px solid ${T.border}` }}>
-                <Field label="Refund window — days before event">
+                <Field label="Refund window &mdash; days before event">
                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                     <input type="number" min="1" max="90" value={form.refundDeadlineDays} onChange={e => setForm({ ...form, refundDeadlineDays: Math.max(1, parseInt(e.target.value) || 1) })} style={{ ...inp(), width: "90px" }} />
                     <span style={{ color: T.textSoft, fontSize: "0.85rem" }}>days before the event start date</span>
@@ -4193,9 +4193,9 @@ function CreateView() {
               <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <Field label="Repeat Pattern">
                   <select value={form.recurringType || "weekly"} onChange={e => setForm({ ...form, recurringType: e.target.value })} style={inp()}>
-                    <option value="weekly">Weekly — same day each week</option>
-                    <option value="monthly-date">Monthly — same date each month (e.g. 15th)</option>
-                    <option value="monthly-position">Monthly — same position (e.g. 3rd Friday)</option>
+                    <option value="weekly">Weekly &mdash; same day each week</option>
+                    <option value="monthly-date">Monthly &mdash; same date each month (e.g. 15th)</option>
+                    <option value="monthly-position">Monthly &mdash; same position (e.g. 3rd Friday)</option>
                   </select>
                 </Field>
                 {form.recurringType === "weekly" && (
@@ -4492,22 +4492,22 @@ function MyTicketsView() {
                 const inWindow = daysUntil >= days;
                 if (cancelConfirm.total === 0) return (
                   <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "1.25rem", fontSize: "0.83rem", color: T.green1, textAlign: "center" }}>
-                    🎟️ Free ticket — no refund needed. Registration will be removed.
+                    🎟️ Free ticket &mdash; no refund needed. Registration will be removed.
                   </div>
                 );
                 if (policy === "none") return (
                   <div style={{ background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: "10px", padding: "12px 14px", marginBottom: "1.25rem", fontSize: "0.83rem", color: "#92400E", textAlign: "center" }}>
-                    ☀️ <strong>Rain or Shine — No Refunds.</strong> This ticket is non-refundable per event policy.
+                    ☀️ <strong>Rain or Shine &mdash; No Refunds.</strong> This ticket is non-refundable per event policy.
                   </div>
                 );
                 if (policy === "full") return (
                   <div style={{ background: inWindow ? T.green5 : "#FEF3C7", border: `1px solid ${inWindow ? T.green3 : "#FDE68A"}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "1.25rem", fontSize: "0.83rem", color: inWindow ? T.green1 : "#92400E", textAlign: "center" }}>
-                    {inWindow ? `✅ Full refund eligible — more than ${days} days until the event.` : `⏰ Refund window closed — less than ${days} days until the event.`}
+                    {inWindow ? `✅ Full refund eligible &mdash; more than ${days} days until the event.` : `⏰ Refund window closed &mdash; less than ${days} days until the event.`}
                   </div>
                 );
                 if (policy === "partial") return (
                   <div style={{ background: inWindow ? T.green5 : "#FEF3C7", border: `1px solid ${inWindow ? T.green3 : "#FDE68A"}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "1.25rem", fontSize: "0.83rem", color: inWindow ? T.green1 : "#92400E", textAlign: "center" }}>
-                    {inWindow ? `♻️ Partial refund eligible — more than ${days} days until the event.` : `⏰ Refund window closed — less than ${days} days until the event.`}
+                    {inWindow ? `♻️ Partial refund eligible &mdash; more than ${days} days until the event.` : `⏰ Refund window closed &mdash; less than ${days} days until the event.`}
                   </div>
                 );
               })()}
@@ -4549,11 +4549,11 @@ function MyTicketsView() {
                         {ev && <div style={{ color: T.textSoft, fontSize: "0.8rem" }}>📍 {ev.location}</div>}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-                        {/* Confirmed badge — always green */}
+                        {/* Confirmed badge &mdash; always green */}
                         <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "6px", padding: "3px 10px", color: T.green1, fontSize: "0.72rem", fontWeight: 700 }}>
                           ✓ CONFIRMED
                         </div>
-                        {/* Check-in badge — red if not checked in, green if checked in */}
+                        {/* Check-in badge &mdash; red if not checked in, green if checked in */}
                         <div style={{ background: ticket.checkedIn ? T.green1 : "#FEE2E2", border: `1px solid ${ticket.checkedIn ? T.green2 : "#FECACA"}`, borderRadius: "6px", padding: "3px 10px", color: ticket.checkedIn ? "#fff" : T.warn, fontSize: "0.72rem", fontWeight: 700 }}>
                           {ticket.checkedIn ? `✔ Checked In${ticket.checkinTime ? "  ·  " + ticket.checkinTime : ""}` : "✗ Not Checked In"}
                         </div>
@@ -4562,7 +4562,7 @@ function MyTicketsView() {
                     </div>
                   </div>
 
-                  {/* QR code + details — always visible */}
+                  {/* QR code + details &mdash; always visible */}
                   <div style={{ borderTop: `1px dashed ${T.border}`, padding: "20px 24px", background: T.cream, display: "flex", gap: "24px", flexWrap: "wrap", alignItems: "flex-start" }}>
                     {/* QR Code */}
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", flexShrink: 0 }}>
@@ -4906,7 +4906,7 @@ function DashSettingsPanel() {
         <StatusBadge on={sortEnabled} />
 
         <div style={{ marginBottom: "10px" }}>
-          {sortItems.length === 0 && <div style={{ color: T.stoneL, fontSize: "0.82rem", padding: "12px", textAlign: "center", background: T.cream, borderRadius: "10px", border: `1px solid ${T.border}`, marginBottom: "6px" }}>No buttons yet — add one below</div>}
+          {sortItems.length === 0 && <div style={{ color: T.stoneL, fontSize: "0.82rem", padding: "12px", textAlign: "center", background: T.cream, borderRadius: "10px", border: `1px solid ${T.border}`, marginBottom: "6px" }}>No buttons yet &mdash; add one below</div>}
           {sortItems.map((si, idx) => (
             <div key={si.id} style={rowStyle}>
               <div style={{ display: "flex", flexDirection: "column", gap: "1px", flexShrink: 0 }}>
@@ -5184,7 +5184,7 @@ function DashboardView() {
                         const token = Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,10);
                         await supabase.from("events").update({ invite_token: token }).eq("id", ev.id);
                         await loadEvents();
-                        showToast("Invite link generated — click again to copy! 🔗");
+                        showToast("Invite link generated &mdash; click again to copy! 🔗");
                       }
                     }} style={{ background: `${T.earth}12`, color: T.earth, border: `1px solid ${T.earthL}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>
                       🔗 {ev.inviteToken ? "Invite Link" : "Generate Link"}
@@ -5211,7 +5211,7 @@ function DashboardView() {
             <div style={{ marginBottom: "1.5rem" }}>
               <label style={{ color: T.textSoft, fontSize: "0.82rem", fontWeight: 600, display: "block", marginBottom: "6px" }}>Select event to check in attendees</label>
               <select value={checkinEvId || ""} onChange={e => { setCheckinEvId(e.target.value || null); setCheckinSearch(""); }} style={{ padding: "10px 14px", borderRadius: "10px", border: `1px solid ${T.border}`, fontFamily: "inherit", fontSize: "0.9rem", background: T.bgCard, color: T.text, width: "100%", maxWidth: "460px" }}>
-                <option value="">— Choose an event —</option>
+                <option value="">&mdash; Choose an event &mdash;</option>
                 {dashActiveEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.title} ({ev.startDate})</option>)}
               </select>
             </div>
@@ -5673,7 +5673,7 @@ function SavedView() {
       <h2 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.75rem", margin: "0 0 0.5rem" }}>🔖 Saved &amp; Following</h2>
       <p style={{ color: T.textSoft, fontSize: "0.9rem", marginBottom: "2rem" }}>Events you're tracking and organizers you follow.</p>
       <Section emoji="✅" title="Going" items={goingEvents} empty="No events marked as going yet" />
-      <Section emoji="❤️" title="Interested" items={interestedEvents} empty="No events marked as interested yet — browse events and tap ⭐ Interested" />
+      <Section emoji="❤️" title="Interested" items={interestedEvents} empty="No events marked as interested yet &mdash; browse events and tap ⭐ Interested" />
       <Section emoji="🔔" title="Events from Followed Organizers" items={followedEvents} empty={following.size === 0 ? "Follow organizers from any event page to see their events here" : "No upcoming events from organizers you follow"} />
       {following.size > 0 && (
         <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "14px", padding: "18px" }}>
@@ -6057,7 +6057,7 @@ function MemoryReel({ eventId }) {
   if (photos.length < 2) return null;
 
   const handleShare = async () => {
-    const text = `📷 Memories from ${ev?.title || "the event"} — ${photos.length} photos from our community!`;
+    const text = `📷 Memories from ${ev?.title || "the event"} &mdash; ${photos.length} photos from our community!`;
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch {}
   };
 
@@ -6151,7 +6151,7 @@ function Footer() {
           <div style={{ color: T.stoneL, fontSize: "0.82rem", marginBottom: "6px" }}>📍 Castana, IA</div>
           <div style={{ color: T.stoneL, fontSize: "0.82rem" }}>🌱 Loess Hills Region</div>
         </div>
-        {/* Admin — only visible to logged-in users */}
+        {/* Admin &mdash; only visible to logged-in users */}
         {currentUser && (
           <div>
             <div style={{ color: T.green4, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "10px" }}>Admin</div>
@@ -6192,7 +6192,7 @@ function AppShell() {
       {/* Offline indicator */}
       {!isOnline && (
         <div style={{ background: "#DC2626", color: "#fff", textAlign: "center", padding: "8px", fontSize: "0.82rem", fontWeight: 600, position: "sticky", top: 0, zIndex: 300 }}>
-          📡 You're offline — showing cached data
+          📡 You're offline &mdash; showing cached data
         </div>
       )}
       {/* PWA Install Banner */}
@@ -6218,7 +6218,7 @@ function AppShell() {
           <span style={{ color: T.green4, fontSize: "0.875rem" }}>
             Hello, <strong style={{ color: "#fff", fontFamily: "'Lora',serif" }}>{currentUser.firstName || currentUser.first_name || ""}!</strong>{" "}
             <span style={{ color: T.stoneL, fontSize: "0.78rem", fontWeight: 400 }}>
-              {view === "discover" && "Welcome back — what's happening near you?"}
+              {view === "discover" && "Welcome back &mdash; what's happening near you?"}
               {view === "detail" && "Viewing event details"}
               {view === "create" && "Creating a new event"}
               {view === "mytickets" && "Your registered events"}
@@ -6228,7 +6228,7 @@ function AppShell() {
           </span>
         </div>
       )}
-      {/* Main content — add bottom padding on mobile so bottom nav doesn't cover content */}
+      {/* Main content &mdash; add bottom padding on mobile so bottom nav doesn't cover content */}
       <div style={{ paddingBottom: mobileHidden ? "0" : "env(safe-area-inset-bottom, 0)" }}>
         {view === "discover" && <DiscoverView />}
         {view === "vendors" && <VendorDirectoryView />}
@@ -6271,7 +6271,7 @@ export default function App() {
         ::-webkit-scrollbar{width:6px;height:6px;}
         ::-webkit-scrollbar-track{background:#F0F0EA;}
         ::-webkit-scrollbar-thumb{background:#74C69D;border-radius:3px;}
-        /* Mobile bottom nav — only visible on small screens */
+        /* Mobile bottom nav &mdash; only visible on small screens */
         .mobile-bottom-nav { display: none !important; }
         .mobile-nav-spacer { display: none !important; }
         .mobile-only { display: none !important; }
