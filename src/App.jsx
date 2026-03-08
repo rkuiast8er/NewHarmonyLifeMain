@@ -5529,7 +5529,7 @@ function TermsEditor({ panelStyle }) {
     });
     if (current) sections.push(current);
     if (sections.length === 0) sections.push({ title: "", body: [""] });
-    return sections.map(s => ({ title: s.title, body: s.body.join(" ") }));
+    return sections.map((s, i) => ({ id: Date.now() + i, title: s.title, body: s.body.join(" ") }));
   };
 
   // Serialize structured sections back to the plain-text format TermsModal reads
@@ -5541,26 +5541,30 @@ function TermsEditor({ panelStyle }) {
   const serialized = serializeTerms(sections);
   const isDirty = serialized !== termsContent;
 
-  const updateSection = (i, field, val) =>
-    setSections(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
+  const updateSection = (id, field, val) =>
+    setSections(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
 
-  const addSection = (afterIndex) => {
+  const addSection = (afterId) => {
     setSections(prev => {
+      const idx = prev.findIndex(s => s.id === afterId);
       const next = [...prev];
-      next.splice(afterIndex + 1, 0, { title: "", body: "" });
+      next.splice(idx + 1, 0, { id: Date.now(), title: "", body: "" });
       return next;
     });
   };
 
-  const deleteSection = (i) => {
-    if (sections.length === 1) { setSections([{ title: "", body: "" }]); return; }
-    setSections(prev => prev.filter((_, idx) => idx !== i));
+  const deleteSection = (id) => {
+    setSections(prev => {
+      if (prev.length === 1) return [{ id: Date.now(), title: "", body: "" }];
+      return prev.filter(s => s.id !== id);
+    });
   };
 
-  const moveSection = (i, dir) => {
-    const j = i + dir;
-    if (j < 0 || j >= sections.length) return;
+  const moveSection = (id, dir) => {
     setSections(prev => {
+      const i = prev.findIndex(s => s.id === id);
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
       const next = [...prev];
       [next[i], next[j]] = [next[j], next[i]];
       return next;
@@ -5612,7 +5616,7 @@ function TermsEditor({ panelStyle }) {
         /* ── EDITOR ── */
         <div style={{ display: "grid", gap: "10px" }}>
           {sections.map((s, i) => (
-            <div key={i} style={{ background: "#fff", border: `1px solid ${T.border}`, borderRadius: "12px", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+            <div key={s.id} style={{ background: "#fff", border: `1px solid ${T.border}`, borderRadius: "12px", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
               {/* Section header bar */}
               <div style={{ background: T.bgDeep, padding: "8px 14px", display: "flex", alignItems: "center", gap: "10px" }}>
                 {/* Auto-number badge */}
@@ -5620,31 +5624,31 @@ function TermsEditor({ panelStyle }) {
                 {/* Title input */}
                 <input
                   value={s.title}
-                  onChange={e => updateSection(i, "title", e.target.value)}
+                  onChange={e => updateSection(s.id, "title", e.target.value)}
                   placeholder="Section title…"
-                  style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: "inherit", fontWeight: 700, fontSize: "0.88rem", color: T.text }}
+                  style={{ flex: 1, background: "#fff", border: `1px solid ${T.border}`, borderRadius: "6px", padding: "5px 10px", outline: "none", fontFamily: "inherit", fontWeight: 700, fontSize: "0.88rem", color: T.text }}
                 />
                 {/* Controls */}
                 <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-                  <button onClick={() => moveSection(i, -1)} disabled={i === 0} title="Move up"
+                  <button onClick={() => moveSection(s.id, -1)} disabled={i === 0} title="Move up"
                     style={{ ...btnBase, background: i === 0 ? "#F3F4F6" : T.cream, color: i === 0 ? T.stoneL : T.textMid, border: `1px solid ${T.border}`, padding: "4px 8px", cursor: i === 0 ? "default" : "pointer" }}>↑</button>
-                  <button onClick={() => moveSection(i, 1)} disabled={i === sections.length - 1} title="Move down"
+                  <button onClick={() => moveSection(s.id, 1)} disabled={i === sections.length - 1} title="Move down"
                     style={{ ...btnBase, background: i === sections.length - 1 ? "#F3F4F6" : T.cream, color: i === sections.length - 1 ? T.stoneL : T.textMid, border: `1px solid ${T.border}`, padding: "4px 8px", cursor: i === sections.length - 1 ? "default" : "pointer" }}>↓</button>
-                  <button onClick={() => deleteSection(i)} title="Delete section"
+                  <button onClick={() => deleteSection(s.id)} title="Delete section"
                     style={{ ...btnBase, background: "#FEE2E2", color: T.warn, border: `1px solid #FECACA`, padding: "4px 8px" }}>🗑</button>
                 </div>
               </div>
               {/* Body textarea */}
               <textarea
                 value={s.body}
-                onChange={e => updateSection(i, "body", e.target.value)}
+                onChange={e => updateSection(s.id, "body", e.target.value)}
                 placeholder="Section body text…"
                 rows={3}
                 style={{ width: "100%", padding: "12px 14px", border: "none", borderTop: `1px solid ${T.border}`, fontFamily: "inherit", fontSize: "0.83rem", lineHeight: 1.7, color: T.textMid, background: "#fff", resize: "vertical", outline: "none", boxSizing: "border-box" }}
               />
               {/* Add section below button */}
               <div style={{ padding: "0 14px 10px", display: "flex", justifyContent: "flex-end" }}>
-                <button onClick={() => addSection(i)}
+                <button onClick={() => addSection(s.id)}
                   style={{ ...btnBase, background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, padding: "4px 12px", fontSize: "0.72rem" }}>
                   + Add section below
                 </button>
