@@ -2575,7 +2575,7 @@ function AddToCalendar({ ev }) {
 
 // ─── CART SIDEBAR ─────────────────────────────────────────────────────────────
 function CartSidebar() {
-  const { cart, cartOpen, setCartOpen, cartTotal, removeFromCart, updateCartQty, openCheckout } = useApp();
+  const { cart, cartOpen, setCartOpen, cartTotal, removeFromCart, updateCartQty, openCheckout, setView } = useApp();
   if (!cartOpen) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 400 }}>
@@ -2625,6 +2625,9 @@ function CartSidebar() {
             </div>
             <button onClick={openCheckout} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               {cartTotal === 0 ? "Complete Registration 🌿" : "Proceed to Checkout →"}
+            </button>
+            <button onClick={() => { setCartOpen(false); setView("discover"); }} style={{ width: "100%", marginTop: "10px", background: "transparent", color: T.textSoft, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "11px", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              ← Continue Shopping
             </button>
           </div>
         )}
