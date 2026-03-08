@@ -55,9 +55,16 @@ const supabase = (() => {
     getSession, setSession,
     auth: {
       signUp: async ({ email, password, options }) => {
-        const data = await req("POST", authUrl("/signup"), { email, password, data: options?.data });
-        if (data?.access_token) setSession(data);
-        return { data, error: null };
+        try {
+          const raw = await req("POST", authUrl("/signup"), { email, password, data: options?.data });
+          // Normalise raw REST response into SDK shape: { data: { user, session }, error }
+          const user = raw?.user ?? (raw?.id ? raw : null);
+          const session = raw?.access_token ? { access_token: raw.access_token, refresh_token: raw.refresh_token } : null;
+          if (session) setSession({ ...raw, user });
+          return { data: { user, session }, error: null };
+        } catch (e) {
+          return { data: { user: null, session: null }, error: e };
+        }
       },
       signInWithPassword: async ({ email, password }) => {
         try {
@@ -998,39 +1005,40 @@ function AppProvider({ children }) {
       email: authForm.email, password: authForm.password,
       options: { data: { first_name: authForm.firstName, last_name: authForm.lastName, phone: authForm.phone, city: authForm.city, state: authForm.state } },
     });
-    if (error) { setAuthErrors({ email: error.message }); return; }
 
-    // Supabase may require email confirmation — check if a session was actually granted
+    if (error) {
+      const msg = error.message || "Signup failed. Please try again.";
+      const isExisting = msg.toLowerCase().includes("already") || msg.toLowerCase().includes("registered");
+      setAuthErrors({ email: isExisting ? "An account with this email already exists. Try signing in instead." : msg });
+      return;
+    }
+
+    const user = data?.user;
     const hasSession = !!(data?.session?.access_token);
 
-    if (data?.user) {
-      const profile = {
-        id: data.user.id,
-        first_name: authForm.firstName, last_name: authForm.lastName,
-        email: authForm.email, phone: authForm.phone,
-        city: authForm.city, state: authForm.state,
-        avatar_color: "#40916C", is_admin: false,
-        email_opt_in: authForm.emailOptIn,
-      };
+    if (!user) {
+      setAuthErrors({ email: "Something went wrong creating your account. Please try again." });
+      return;
+    }
 
-      if (hasSession) {
-        // Session is live — insert profile and log them in immediately
-        const { error: profileError } = await supabase.from("profiles").insert(profile);
-        if (profileError && !profileError.message?.includes("duplicate")) {
-          console.warn("Profile insert failed:", profileError.message);
-          // Non-fatal: user is still created in auth, they can log in
-        }
-        setCurrentUser(profile);
-        setAuthModal(null);
-        showToast(`🌿 Welcome to New Harmony, ${authForm.firstName}!`);
-      } else {
-        // Email confirmation required — show a clear message instead of closing silently
-        setAuthModal(null);
-        showToast(`📬 Check your email to confirm your account, then sign in!`);
-      }
+    const profile = {
+      id: user.id,
+      first_name: authForm.firstName, last_name: authForm.lastName,
+      email: authForm.email, phone: authForm.phone,
+      city: authForm.city, state: authForm.state,
+      avatar_color: "#40916C", is_admin: false,
+      email_opt_in: authForm.emailOptIn,
+    };
+
+    if (hasSession) {
+      const { error: profileError } = await supabase.from("profiles").insert(profile);
+      if (profileError) console.warn("Profile insert failed (non-fatal):", profileError.message);
+      setCurrentUser(profile);
+      setAuthModal(null);
+      showToast(`🌿 Welcome to New Harmony, ${authForm.firstName}!`);
     } else {
-      // No user returned at all — something unexpected happened
-      setAuthErrors({ email: "Something went wrong. Please try again." });
+      setAuthModal(null);
+      showToast(`📬 Almost there! Check your email and click the confirmation link to activate your account.`);
     }
   };
   const handleLogout = async () => {
