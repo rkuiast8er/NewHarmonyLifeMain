@@ -5513,57 +5513,157 @@ function DashLoginView() {
 // ─── DASHBOARD SETTINGS PANEL ────────────────────────────────────────────────
 function TermsEditor({ panelStyle }) {
   const { termsContent, saveTermsContent, showToast } = useApp();
-  const [localTerms, setLocalTerms] = useState(termsContent);
-  const [termsPreview, setTermsPreview] = useState(false);
-  const isDirty = localTerms !== termsContent;
+
+  // Parse plain-text terms into structured sections on mount
+  const parseTerms = (text) => {
+    const sections = [];
+    let current = null;
+    (text || "").split("\n").forEach(line => {
+      const m = line.match(/^\d+\.\s+(.+)/);
+      if (m) {
+        if (current) sections.push(current);
+        current = { title: m[1].trim(), body: [] };
+      } else if (current && line.trim()) {
+        current.body.push(line.trim());
+      }
+    });
+    if (current) sections.push(current);
+    if (sections.length === 0) sections.push({ title: "", body: [""] });
+    return sections.map(s => ({ title: s.title, body: s.body.join(" ") }));
+  };
+
+  // Serialize structured sections back to the plain-text format TermsModal reads
+  const serializeTerms = (sections) =>
+    sections.map((s, i) => `${i + 1}. ${s.title}\n${s.body}`).join("\n\n");
+
+  const [sections, setSections] = useState(() => parseTerms(termsContent));
+  const [preview, setPreview] = useState(false);
+  const serialized = serializeTerms(sections);
+  const isDirty = serialized !== termsContent;
+
+  const updateSection = (i, field, val) =>
+    setSections(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
+
+  const addSection = (afterIndex) => {
+    setSections(prev => {
+      const next = [...prev];
+      next.splice(afterIndex + 1, 0, { title: "", body: "" });
+      return next;
+    });
+  };
+
+  const deleteSection = (i) => {
+    if (sections.length === 1) { setSections([{ title: "", body: "" }]); return; }
+    setSections(prev => prev.filter((_, idx) => idx !== i));
+  };
+
+  const moveSection = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= sections.length) return;
+    setSections(prev => {
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
+
+  const handleSave = () => { saveTermsContent(serialized); showToast("Terms saved ✓"); };
+  const handleDiscard = () => { setSections(parseTerms(termsContent)); };
+
+  const btnBase = { border: "none", borderRadius: "7px", padding: "5px 10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px" };
+
   return (
     <div style={panelStyle}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px", flexWrap: "wrap", gap: "10px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px", flexWrap: "wrap", gap: "10px" }}>
         <h3 style={{ color: T.text, margin: 0, fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>📄 Terms of Service & Privacy Policy</h3>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={() => setTermsPreview(p => !p)}
-            style={{ background: termsPreview ? T.green5 : T.cream, color: termsPreview ? T.green1 : T.textSoft, border: `1px solid ${termsPreview ? T.green3 : T.border}`, borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
-            {termsPreview ? "✏️ Edit" : "👁 Preview"}
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button onClick={() => setPreview(p => !p)}
+            style={{ ...btnBase, background: preview ? T.green5 : T.cream, color: preview ? T.green1 : T.textSoft, border: `1px solid ${preview ? T.green3 : T.border}`, padding: "6px 14px" }}>
+            {preview ? "✏️ Edit" : "👁 Preview"}
           </button>
-          {isDirty && (
-            <button onClick={() => { saveTermsContent(localTerms); showToast("Terms saved ✓"); }}
-              style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.78rem" }}>
-              Save Changes
+          {isDirty && <>
+            <button onClick={handleSave}
+              style={{ ...btnBase, background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", padding: "6px 14px", fontWeight: 700 }}>
+              💾 Save Changes
             </button>
-          )}
-          {isDirty && (
-            <button onClick={() => setLocalTerms(termsContent)}
-              style={{ background: "#FEE2E2", color: T.warn, border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
+            <button onClick={handleDiscard}
+              style={{ ...btnBase, background: "#FEE2E2", color: T.warn, padding: "6px 14px" }}>
               Discard
             </button>
-          )}
+          </>}
         </div>
       </div>
-      <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: "0 0 14px", lineHeight: 1.6 }}>
-        This is displayed when users click "Terms of Service" during sign-up. Format sections with a number and period at the start of a line (e.g. <code style={{ background: T.cream, padding: "1px 5px", borderRadius: "4px" }}>1. Section Title</code>) — the rest of the text in that block becomes the body.
+      <p style={{ color: T.stoneL, fontSize: "0.78rem", margin: "0 0 16px" }}>
+        {sections.length} section{sections.length !== 1 ? "s" : ""} · Sections are auto-numbered when displayed to users
       </p>
-      {termsPreview ? (
-        <div style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "18px 20px", maxHeight: "420px", overflowY: "auto" }}>
-          {localTerms.split("\n").map((line, i) => {
-            const isHeading = /^\d+\.\s+/.test(line);
-            return line.trim() ? (
-              <p key={i} style={{ margin: "0 0 8px", color: isHeading ? T.green1 : T.textSoft, fontWeight: isHeading ? 700 : 400, fontSize: isHeading ? "0.88rem" : "0.83rem", lineHeight: 1.7 }}>{line}</p>
-            ) : <div key={i} style={{ height: "6px" }} />;
-          })}
+
+      {preview ? (
+        /* ── PREVIEW ── */
+        <div style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "20px 24px", maxHeight: "500px", overflowY: "auto" }}>
+          {sections.map((s, i) => (
+            <div key={i} style={{ marginBottom: "18px" }}>
+              <div style={{ color: T.green1, fontWeight: 700, fontSize: "0.88rem", marginBottom: "5px" }}>{i + 1}. {s.title}</div>
+              <p style={{ color: T.textSoft, fontSize: "0.84rem", lineHeight: 1.75, margin: 0 }}>{s.body}</p>
+            </div>
+          ))}
         </div>
       ) : (
-        <textarea
-          value={localTerms}
-          onChange={e => setLocalTerms(e.target.value)}
-          rows={22}
-          style={{ width: "100%", padding: "14px", borderRadius: "10px", border: `1px solid ${isDirty ? T.green3 : T.border}`, fontFamily: "inherit", fontSize: "0.83rem", lineHeight: 1.7, color: T.textMid, background: "#fff", resize: "vertical", outline: "none", boxSizing: "border-box" }}
-          placeholder="Enter your terms of service here..."
-          spellCheck={true}
-        />
+        /* ── EDITOR ── */
+        <div style={{ display: "grid", gap: "10px" }}>
+          {sections.map((s, i) => (
+            <div key={i} style={{ background: "#fff", border: `1px solid ${T.border}`, borderRadius: "12px", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+              {/* Section header bar */}
+              <div style={{ background: T.bgDeep, padding: "8px 14px", display: "flex", alignItems: "center", gap: "10px" }}>
+                {/* Auto-number badge */}
+                <div style={{ background: T.green1, color: "#fff", borderRadius: "50%", width: "24px", height: "24px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.72rem", fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
+                {/* Title input */}
+                <input
+                  value={s.title}
+                  onChange={e => updateSection(i, "title", e.target.value)}
+                  placeholder="Section title…"
+                  style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: "inherit", fontWeight: 700, fontSize: "0.88rem", color: T.text }}
+                />
+                {/* Controls */}
+                <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                  <button onClick={() => moveSection(i, -1)} disabled={i === 0} title="Move up"
+                    style={{ ...btnBase, background: i === 0 ? "#F3F4F6" : T.cream, color: i === 0 ? T.stoneL : T.textMid, border: `1px solid ${T.border}`, padding: "4px 8px", cursor: i === 0 ? "default" : "pointer" }}>↑</button>
+                  <button onClick={() => moveSection(i, 1)} disabled={i === sections.length - 1} title="Move down"
+                    style={{ ...btnBase, background: i === sections.length - 1 ? "#F3F4F6" : T.cream, color: i === sections.length - 1 ? T.stoneL : T.textMid, border: `1px solid ${T.border}`, padding: "4px 8px", cursor: i === sections.length - 1 ? "default" : "pointer" }}>↓</button>
+                  <button onClick={() => deleteSection(i)} title="Delete section"
+                    style={{ ...btnBase, background: "#FEE2E2", color: T.warn, border: `1px solid #FECACA`, padding: "4px 8px" }}>🗑</button>
+                </div>
+              </div>
+              {/* Body textarea */}
+              <textarea
+                value={s.body}
+                onChange={e => updateSection(i, "body", e.target.value)}
+                placeholder="Section body text…"
+                rows={3}
+                style={{ width: "100%", padding: "12px 14px", border: "none", borderTop: `1px solid ${T.border}`, fontFamily: "inherit", fontSize: "0.83rem", lineHeight: 1.7, color: T.textMid, background: "#fff", resize: "vertical", outline: "none", boxSizing: "border-box" }}
+              />
+              {/* Add section below button */}
+              <div style={{ padding: "0 14px 10px", display: "flex", justifyContent: "flex-end" }}>
+                <button onClick={() => addSection(i)}
+                  style={{ ...btnBase, background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, padding: "4px 12px", fontSize: "0.72rem" }}>
+                  + Add section below
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Add section at end */}
+          <button onClick={() => addSection(sections.length - 1)}
+            style={{ width: "100%", padding: "12px", background: T.cream, border: `2px dashed ${T.border}`, borderRadius: "12px", color: T.textSoft, fontFamily: "inherit", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer" }}>
+            + Add New Section
+          </button>
+        </div>
       )}
+
       {isDirty && (
-        <div style={{ marginTop: "10px", background: "#FFF8E7", border: "1px solid #F6D860", borderRadius: "8px", padding: "8px 12px", fontSize: "0.78rem", color: "#92710A", fontWeight: 600 }}>
-          ⚠ Unsaved changes — click Save Changes to publish.
+        <div style={{ marginTop: "12px", background: "#FFF8E7", border: "1px solid #F6D860", borderRadius: "8px", padding: "9px 14px", fontSize: "0.78rem", color: "#92710A", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+          <span>⚠ Unsaved changes</span>
+          <button onClick={handleSave} style={{ ...btnBase, background: T.green1, color: "#fff", padding: "5px 14px" }}>💾 Save Now</button>
         </div>
       )}
     </div>
