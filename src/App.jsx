@@ -556,6 +556,19 @@ function AppProvider({ children }) {
     try { const s = localStorage.getItem("nh_sort_config"); return s ? JSON.parse(s) : _defaultSortConfig; } catch { return _defaultSortConfig; }
   });
   const saveSortConfig = (cfg) => { setSortConfig(cfg); localStorage.setItem("nh_sort_config", JSON.stringify(cfg)); };
+
+  // ── Site-wide configurable event categories ───────────────────────────
+  const _defaultCategoryConfig = {
+    enabled: true,
+    items: [
+      "Community", "Workshop", "Festival", "Music", "Food & Drink",
+      "Arts & Crafts", "Wellness", "Sports & Nature", "Charity", "Other",
+    ],
+  };
+  const [categoryConfig, setCategoryConfig] = useState(() => {
+    try { const s = localStorage.getItem("nh_category_config"); return s ? JSON.parse(s) : _defaultCategoryConfig; } catch { return _defaultCategoryConfig; }
+  });
+  const saveCategoryConfig = (cfg) => { setCategoryConfig(cfg); localStorage.setItem("nh_category_config", JSON.stringify(cfg)); };
   const [checkoutErrors, setCheckoutErrors] = useState({});
   const [checkoutStep, setCheckoutStep] = useState(1);
   const [paymentForm, setPaymentForm] = useState({ cardName: "", cardNum: "", expiry: "", cvv: "" });
@@ -1904,6 +1917,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     customAnswers, setCustomAnswers,
     vibeConfig, saveVibeConfig,
     sortConfig, saveSortConfig,
+    categoryConfig, saveCategoryConfig,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -3006,7 +3020,7 @@ function CalendarView() {
 
 // ─── DISCOVER VIEW ────────────────────────────────────────────────────────────
 function DiscoverView() {
-  const { search, setSearch, filterCat, setFilterCat, filterDate, setFilterDate, filterPrice, setFilterPrice, filterVibe, setFilterVibe, filteredEvents, activeEvents, archivedEvents, following, vibeConfig, sortConfig } = useApp();
+  const { search, setSearch, filterCat, setFilterCat, filterDate, setFilterDate, filterPrice, setFilterPrice, filterVibe, setFilterVibe, filteredEvents, activeEvents, archivedEvents, following, vibeConfig, sortConfig, categoryConfig } = useApp();
   const [filterFollowing, setFilterFollowing] = useState(false);
   const toggleVibe = (id) => setFilterVibe(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
   const activeDateItems = sortConfig.enabled ? sortConfig.items.filter(i => i.group === "date") : [];
@@ -3036,14 +3050,15 @@ function DiscoverView() {
       </div>
       {/* Filter bar */}
       <div style={{ padding: "1.25rem 2rem 0", display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "4px", scrollbarWidth: "none", msOverflowStyle: "none" }}
-            className="hide-scrollbar">
-            {["All", ...CATEGORIES].map(cat => <button key={cat} onClick={() => setFilterCat(cat)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterCat === cat ? `1px solid ${T.green1}` : `1px solid ${T.border}`, background: filterCat === cat ? T.green5 : "transparent", color: filterCat === cat ? T.green1 : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit", fontWeight: filterCat === cat ? 600 : 400, flexShrink: 0 }}>{cat}</button>)}
+        {categoryConfig.enabled && categoryConfig.items.length > 0 && (
+          <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "4px", scrollbarWidth: "none", msOverflowStyle: "none" }}
+              className="hide-scrollbar">
+              {["All", ...categoryConfig.items].map(cat => <button key={cat} onClick={() => setFilterCat(cat)} style={{ padding: "6px 14px", borderRadius: "100px", border: filterCat === cat ? `1px solid ${T.green1}` : `1px solid ${T.border}`, background: filterCat === cat ? T.green5 : "transparent", color: filterCat === cat ? T.green1 : T.textSoft, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit", fontWeight: filterCat === cat ? 600 : 400, flexShrink: 0 }}>{cat}</button>)}
+            </div>
+            <div style={{ position: "absolute", right: 0, top: 0, bottom: "4px", width: "40px", background: `linear-gradient(to right, transparent, ${T.bg})`, pointerEvents: "none" }} />
           </div>
-          {/* Fade edge hint for horizontal scroll */}
-          <div style={{ position: "absolute", right: 0, top: 0, bottom: "4px", width: "40px", background: `linear-gradient(to right, transparent, ${T.bg})`, pointerEvents: "none" }} />
-        </div>
+        )}
         {(sortConfig.enabled || following.size > 0) && (
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
             {sortConfig.enabled && activeDateItems.map(item => {
@@ -3859,7 +3874,7 @@ function CheckoutView() {
 
 // ─── CREATE VIEW ──────────────────────────────────────────────────────────────
 function CreateView() {
-  const { form, setForm, formErrors, editingId, setEditingId, setView, handleSave, handlePhotoAdd, removePhoto, fileRef, dashUnlocked } = useApp();
+  const { form, setForm, formErrors, editingId, setEditingId, setView, handleSave, handlePhotoAdd, removePhoto, fileRef, dashUnlocked, categoryConfig } = useApp();
   const hasChanges = form.title.trim() || form.description.trim() || form.location.trim();
 
   // Warn on browser back/close too &mdash; must be before any early returns
@@ -3902,7 +3917,7 @@ function CreateView() {
             <div style={{ display: "grid", gap: "16px" }}>
               <Field label="Event Title *" error={formErrors.title}><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Give your event a meaningful name" style={inp(formErrors.title)} /></Field>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                <Field label="Category"><select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={inp()}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></Field>
+                <Field label="Category"><select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={inp()}>{(categoryConfig.items.length ? categoryConfig.items : CATEGORIES).map(c => <option key={c}>{c}</option>)}</select></Field>
                 <Field label="Accent Color">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 14px", background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px" }}>
                     <input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} style={{ width: "44px", height: "32px", border: "none", borderRadius: "6px", cursor: "pointer", padding: 0 }} />
@@ -4770,7 +4785,7 @@ function DashLoginView() {
 
 // ─── DASHBOARD SETTINGS PANEL ────────────────────────────────────────────────
 function DashSettingsPanel() {
-  const { vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, showToast, resendApiKey, setResendApiKey } = useApp();
+  const { vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, showToast, resendApiKey, setResendApiKey } = useApp();
 
   // ── Vibe editor state ───────────────────────────────────────────────────
   const [vibeEnabled, setVibeEnabled] = useState(vibeConfig.enabled);
@@ -4804,6 +4819,22 @@ function DashSettingsPanel() {
 
   const saveSorts = () => { saveSortConfig({ enabled: sortEnabled, items: sortItems }); showToast("Sort settings saved ✓"); };
   const toggleSortEnabled = () => { const next = !sortEnabled; setSortEnabled(next); saveSortConfig({ enabled: next, items: sortItems }); };
+
+  // ── Category editor state ────────────────────────────────────────────────
+  const [catEnabled, setCatEnabled] = useState(categoryConfig.enabled);
+  const [catItems, setCatItems] = useState([...categoryConfig.items]);
+  const [catEditIdx, setCatEditIdx] = useState(null);
+  const [catEditVal, setCatEditVal] = useState("");
+  const [newCat, setNewCat] = useState("");
+  const [catAddOpen, setCatAddOpen] = useState(false);
+
+  const saveCats = () => { saveCategoryConfig({ enabled: catEnabled, items: catItems }); showToast("Category settings saved ✓"); };
+  const toggleCatEnabled = () => { const next = !catEnabled; setCatEnabled(next); saveCategoryConfig({ enabled: next, items: catItems }); };
+  const removeCat = (idx) => setCatItems(prev => prev.filter((_, i) => i !== idx));
+  const startEditCat = (idx) => { setCatEditIdx(idx); setCatEditVal(catItems[idx]); };
+  const commitEditCat = () => { if (catEditVal.trim()) setCatItems(prev => prev.map((c, i) => i === catEditIdx ? catEditVal.trim() : c)); setCatEditIdx(null); };
+  const addCat = () => { if (!newCat.trim()) return; setCatItems(prev => [...prev, newCat.trim()]); setNewCat(""); setCatAddOpen(false); };
+  const moveCat = (idx, dir) => { const arr = [...catItems]; const s = idx + dir; if (s < 0 || s >= arr.length) return; [arr[idx], arr[s]] = [arr[s], arr[idx]]; setCatItems(arr); };
   const updateSortItem = (id, field, val) => setSortItems(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
   const removeSortItem = (id) => setSortItems(prev => prev.filter(s => s.id !== id));
   const addSortItem = () => {
@@ -4844,6 +4875,59 @@ function DashSettingsPanel() {
 
   return (
     <div style={{ maxWidth: "600px" }}>
+
+      {/* ── Event Categories ──────────────────────────────────────────────── */}
+      <div style={panelStyle}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", marginBottom: "6px" }}>
+          <div>
+            <h3 style={{ color: T.text, margin: "0 0 4px", fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>🗂️ Event Categories</h3>
+            <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: 0, lineHeight: 1.5 }}>Category filter buttons on the Discover page, and options in the event creation form.</p>
+          </div>
+          <TogglePill on={catEnabled} onToggle={toggleCatEnabled} />
+        </div>
+        <StatusBadge on={catEnabled} />
+
+        <div style={{ marginBottom: "10px" }}>
+          {catItems.map((cat, idx) => (
+            <div key={idx} style={rowStyle}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1px", flexShrink: 0 }}>
+                <button onClick={() => moveCat(idx, -1)} disabled={idx === 0} style={{ background: "none", border: "none", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? T.border : T.stoneL, fontSize: "0.6rem", padding: "1px 3px", lineHeight: 1 }}>▲</button>
+                <button onClick={() => moveCat(idx, 1)} disabled={idx === catItems.length - 1} style={{ background: "none", border: "none", cursor: idx === catItems.length - 1 ? "default" : "pointer", color: idx === catItems.length - 1 ? T.border : T.stoneL, fontSize: "0.6rem", padding: "1px 3px", lineHeight: 1 }}>▼</button>
+              </div>
+              {catEditIdx === idx ? (
+                <>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <TinyInput value={catEditVal} onChange={setCatEditVal} placeholder="Category name" />
+                  </div>
+                  <SmBtn label="Done ✓" onClick={commitEditCat} />
+                </>
+              ) : (
+                <>
+                  <span style={{ flex: 1, color: T.textMid, fontSize: "0.85rem", fontWeight: 500, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
+                  <SmBtn label="✏️ Edit" onClick={() => startEditCat(idx)} />
+                  <SmBtn label="✕" onClick={() => removeCat(idx)} danger />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {catAddOpen ? (
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", padding: "10px 12px", background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: "140px" }}>
+              <TinyInput value={newCat} onChange={setNewCat} placeholder="Category name (e.g. Family Fun)" />
+            </div>
+            <SmBtn label="+ Add" onClick={addCat} />
+            <SmBtn label="Cancel" onClick={() => { setCatAddOpen(false); setNewCat(""); }} />
+          </div>
+        ) : (
+          <button onClick={() => setCatAddOpen(true)} style={{ background: "none", border: `1px dashed ${T.green3}`, color: T.green1, borderRadius: "9px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.82rem", width: "100%", marginBottom: "12px" }}>
+            + Add Category
+          </button>
+        )}
+
+        <SaveBtn label="Save Category Settings ✓" onClick={saveCats} />
+      </div>
 
       {/* ── Vibe Tags ─────────────────────────────────────────────────────── */}
       <div style={panelStyle}>
@@ -5002,7 +5086,7 @@ function DashSettingsPanel() {
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView() {
-  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig } = useApp();
+  const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig } = useApp();
   const [dashTab, setDashTab] = useState("events");
   const [archiveSearch, setArchiveSearch] = useState("");
   const [checkinSearch, setCheckinSearch] = useState("");
