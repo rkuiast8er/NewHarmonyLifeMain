@@ -5682,8 +5682,61 @@ function DashSettingsPanel() {
 
 // ─── ADMIN DETAIL VIEW ────────────────────────────────────────────────────────
 function AdminDetailView() {
-  const { selectedEvent, setView, setSelectedId, startEdit, handleDelete, duplicateEvent, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, showToast, getInterest, reviews, dashUnlocked } = useApp();
+  const { selectedEvent, setView, setSelectedId, startEdit, handleDelete, duplicateEvent, scheduleEventReminders, copyInviteLink, showToast, getInterest, reviews, dashUnlocked, checkinAttendee, undoCheckin, updateVendorStatus } = useApp();
   const ev = selectedEvent;
+
+  // Local ticket roster state — loaded from Supabase for this event
+  const [evTickets, setEvTickets] = React.useState([]);
+  const [ticketsLoading, setTicketsLoading] = React.useState(false);
+  const [ticketSearch, setTicketSearch] = React.useState("");
+  const [vendorSearch, setVendorSearch] = React.useState("");
+  // Local vendor check-in state (keyed by vendor id)
+  const [vendorCheckins, setVendorCheckins] = React.useState({});
+
+  // Load tickets for this event on mount
+  React.useEffect(() => {
+    if (!ev?.id) return;
+    setTicketsLoading(true);
+    supabase.from("tickets").select("*").eq("event_id", ev.id).then(({ data }) => {
+      if (data) {
+        setEvTickets(data.map(t => ({
+          id: t.id, ticketId: t.ticket_id, orderId: t.order_id,
+          eventId: t.event_id, tierId: t.tier_id,
+          tierName: t.tier_name || "", eventTitle: t.event_title || "",
+          buyerName: t.buyer_name, buyerEmail: t.buyer_email,
+          buyerPhone: t.buyer_phone || "",
+          qty: t.quantity, total: parseFloat(t.total || 0),
+          orderNum: t.order_number || "", bookedOn: t.created_at?.split("T")[0] || "",
+          status: t.status, checkedIn: t.checked_in, checkinTime: t.checkin_time,
+        })));
+      }
+      setTicketsLoading(false);
+    });
+    // Restore saved vendor check-ins from localStorage
+    try {
+      const saved = localStorage.getItem(`vendor_checkins_${ev.id}`);
+      if (saved) setVendorCheckins(JSON.parse(saved));
+    } catch(e) {}
+  }, [ev?.id]);
+
+  const toggleVendorCheckin = (vendorId) => {
+    setVendorCheckins(prev => {
+      const next = { ...prev, [vendorId]: !prev[vendorId] };
+      try { localStorage.setItem(`vendor_checkins_${ev.id}`, JSON.stringify(next)); } catch(e) {}
+      return next;
+    });
+  };
+
+  const handleTicketCheckin = async (ticket) => {
+    if (ticket.checkedIn) {
+      await undoCheckin(ticket.id);
+      setEvTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, checkedIn: false, checkinTime: null } : t));
+    } else {
+      await checkinAttendee(ev.id, ticket.id);
+      const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setEvTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, checkedIn: true, checkinTime: now } : t));
+    }
+  };
 
   if (!ev || !dashUnlocked) { return null; }
 
@@ -5699,6 +5752,19 @@ function AdminDetailView() {
   const pendingVendors = (ev.vendors || []).filter(v => v.status === "pending");
   const allVendors = ev.vendors || [];
   const waitlist = ev.waitlist || [];
+
+  // Ticket roster filtered
+  const activeTickets = evTickets.filter(t => t.status !== "cancelled");
+  const filteredTickets = ticketSearch
+    ? activeTickets.filter(t => [t.buyerName, t.buyerEmail, t.ticketId, t.orderNum, t.buyerPhone].some(f => f && f.toLowerCase().includes(ticketSearch.toLowerCase())))
+    : activeTickets;
+  const checkedInCount = activeTickets.filter(t => t.checkedIn).length;
+
+  // Vendor roster filtered
+  const filteredVendors = vendorSearch
+    ? allVendors.filter(v => [v.businessName, v.contactName, v.email, v.vendorType].some(f => f && f.toLowerCase().includes(vendorSearch.toLowerCase())))
+    : allVendors;
+  const vendorCheckinCount = allVendors.filter(v => vendorCheckins[v.id]).length;
 
   const StatCard = ({ label, value, sub, color, icon }) => (
     <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "16px 18px", minWidth: "130px" }}>
@@ -5857,38 +5923,204 @@ function AdminDetailView() {
             )}
           </Section>
 
-          {/* ── VENDOR APPLICATIONS ── */}
+          {/* ── VENDOR ROSTER WITH CHECK-IN ── */}
           {ev.vendorInvite && (
-            <Section title={`Vendor Applications (${allVendors.length})`} icon="🛖" accent={`${T.earth}55`}>
-              <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
-                <Badge label={`✅ ${approvedVendors.length} Approved`} color="#166534" bg="#DCFCE7" />
-                <Badge label={`⏳ ${pendingVendors.length} Pending`} color="#92400E" bg="#FEF3C7" />
-                {allVendors.filter(v => v.status === "rejected").length > 0 && <Badge label={`❌ ${allVendors.filter(v=>v.status==="rejected").length} Rejected`} color={T.warn} bg="#FEE2E2" />}
+            <div style={{ background: T.bgCard, border: `1px solid ${T.earth}55`, borderRadius: "16px", padding: "22px", marginBottom: "20px", gridColumn: "1 / -1" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+                <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.05rem", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>🛖 Vendor Roster &amp; Check-In</h3>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ background: "#DCFCE7", color: "#166534", borderRadius: "6px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700 }}>✅ {approvedVendors.length} Approved</span>
+                  <span style={{ background: "#FEF3C7", color: "#92400E", borderRadius: "6px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700 }}>⏳ {pendingVendors.length} Pending</span>
+                  <span style={{ background: T.green5, color: T.green1, borderRadius: "6px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700 }}>🏁 {vendorCheckinCount}/{allVendors.length} Arrived</span>
+                </div>
               </div>
               {ev.vendorDeadline && <div style={{ color: T.earth, fontSize: "0.82rem", fontWeight: 600, marginBottom: "12px" }}>📅 Application Deadline: {fmt(ev.vendorDeadline)}</div>}
+              {/* Search */}
+              <input placeholder="Search vendors by name, type, email…" value={vendorSearch} onChange={e => setVendorSearch(e.target.value)}
+                style={{ padding: "9px 14px", borderRadius: "9px", border: `1px solid ${T.border}`, fontFamily: "inherit", fontSize: "0.85rem", width: "100%", maxWidth: "340px", background: T.cream, marginBottom: "14px", outline: "none" }} />
               {allVendors.length === 0 ? (
-                <div style={{ color: T.stoneL, fontSize: "0.85rem" }}>No applications yet</div>
-              ) : allVendors.map(v => (
-                <div key={v.id} style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "8px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", flexWrap: "wrap" }}>
-                    <div>
-                      <div style={{ color: T.text, fontWeight: 700, fontSize: "0.9rem" }}>{v.businessName}</div>
-                      <div style={{ color: T.stoneL, fontSize: "0.75rem" }}>{v.contactName} · {v.email}</div>
-                      <div style={{ color: T.textSoft, fontSize: "0.75rem", marginTop: "2px" }}>{v.vendorType} · {v.city}, {v.state}</div>
-                    </div>
-                    <Badge label={v.status === "approved" ? "✅ Approved" : v.status === "rejected" ? "❌ Rejected" : "⏳ Pending"} color={v.status === "approved" ? "#166534" : v.status === "rejected" ? T.warn : "#92400E"} bg={v.status === "approved" ? "#DCFCE7" : v.status === "rejected" ? "#FEE2E2" : "#FEF3C7"} />
-                  </div>
-                  {v.description && <div style={{ color: T.textSoft, fontSize: "0.78rem", marginTop: "6px", lineHeight: 1.5 }}>{v.description}</div>}
-                  <div style={{ display: "flex", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
-                    {v.spaceNeeded && <Badge label={`📐 ${v.spaceNeeded}`} color={T.textSoft} bg={T.border} />}
-                    {v.electricNeeded && <Badge label="⚡ Needs Power" color="#92400E" bg="#FEF3C7" />}
-                    {v.tentOwned && <Badge label="⛺ Has Tent" color={T.green1} bg={T.green5} />}
-                    {v.phone && <Badge label={`📞 ${v.phone}`} color={T.textSoft} bg={T.border} />}
-                  </div>
+                <div style={{ color: T.stoneL, fontSize: "0.85rem", padding: "20px", textAlign: "center" }}>No vendor applications yet</div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                    <thead>
+                      <tr style={{ background: T.bgDeep }}>
+                        {["Check-In", "Business", "Contact", "Type", "Space", "Years", "Needs", "City/State", "Contact Info", "Status"].map(h => (
+                          <th key={h} style={{ color: T.green4, padding: "9px 12px", textAlign: "left", fontWeight: 700, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredVendors.map((v, i) => {
+                        const arrived = !!vendorCheckins[v.id];
+                        const needsHighlight = v.electricNeeded || !v.tentOwned || v.comments;
+                        return (
+                          <tr key={v.id} style={{ background: arrived ? "#F0FDF4" : i % 2 === 0 ? "#fff" : T.cream, borderBottom: `1px solid ${T.border}`, transition: "background 0.15s" }}>
+                            {/* Check-in toggle */}
+                            <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                              <button onClick={() => toggleVendorCheckin(v.id)}
+                                style={{ background: arrived ? T.green1 : "#E5E7EB", color: arrived ? "#fff" : T.stone, border: "none", borderRadius: "7px", padding: "5px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.75rem", whiteSpace: "nowrap", transition: "all 0.15s" }}>
+                                {arrived ? "✓ Arrived" : "Mark In"}
+                              </button>
+                            </td>
+                            {/* Business */}
+                            <td style={{ padding: "10px 12px" }}>
+                              <div style={{ color: T.text, fontWeight: 700, fontSize: "0.875rem" }}>{v.businessName}</div>
+                              {v.description && <div style={{ color: T.stoneL, fontSize: "0.72rem", marginTop: "2px", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={v.description}>{v.description}</div>}
+                              {v.website && <div style={{ color: T.green2, fontSize: "0.7rem", marginTop: "1px" }}>{v.website}</div>}
+                              {v.instagram && <div style={{ color: T.textSoft, fontSize: "0.7rem" }}>{v.instagram}</div>}
+                            </td>
+                            {/* Contact */}
+                            <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                              <div style={{ color: T.textMid, fontWeight: 600 }}>{v.contactName}</div>
+                            </td>
+                            {/* Type */}
+                            <td style={{ padding: "10px 12px" }}>
+                              <span style={{ background: T.green5, color: T.green1, borderRadius: "5px", padding: "2px 8px", fontSize: "0.7rem", fontWeight: 600, whiteSpace: "nowrap" }}>{v.vendorType}</span>
+                            </td>
+                            {/* Space */}
+                            <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                              <span style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "5px", padding: "2px 8px", fontSize: "0.72rem", color: T.textMid }}>{v.spaceNeeded || "—"}</span>
+                            </td>
+                            {/* Years */}
+                            <td style={{ padding: "10px 12px", color: T.textSoft, textAlign: "center" }}>{v.yearsInBusiness || "—"}</td>
+                            {/* Needs — highlighted if special requirements */}
+                            <td style={{ padding: "10px 12px" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                                {v.electricNeeded && <span style={{ background: "#FEF3C7", color: "#92400E", borderRadius: "5px", padding: "2px 7px", fontSize: "0.68rem", fontWeight: 700, whiteSpace: "nowrap" }}>⚡ Needs Power</span>}
+                                {!v.tentOwned && <span style={{ background: "#FEE2E2", color: T.warn, borderRadius: "5px", padding: "2px 7px", fontSize: "0.68rem", fontWeight: 700, whiteSpace: "nowrap" }}>⛺ No Tent</span>}
+                                {v.tentOwned && <span style={{ background: T.green5, color: T.green1, borderRadius: "5px", padding: "2px 7px", fontSize: "0.68rem", fontWeight: 600, whiteSpace: "nowrap" }}>⛺ Has Tent</span>}
+                                {v.hasPermit && <span style={{ background: "#F0FDF4", color: "#166534", borderRadius: "5px", padding: "2px 7px", fontSize: "0.68rem", fontWeight: 600, whiteSpace: "nowrap" }}>📋 Permitted</span>}
+                                {v.comments && <span style={{ background: "#EFF6FF", color: "#1D4ED8", borderRadius: "5px", padding: "2px 7px", fontSize: "0.68rem", fontWeight: 700, whiteSpace: "nowrap", cursor: "help" }} title={v.comments}>💬 Note</span>}
+                                {!v.electricNeeded && v.tentOwned && v.hasPermit && !v.comments && <span style={{ color: T.stoneL, fontSize: "0.72rem" }}>—</span>}
+                              </div>
+                            </td>
+                            {/* City/State */}
+                            <td style={{ padding: "10px 12px", color: T.textSoft, whiteSpace: "nowrap" }}>{v.city}, {v.state}</td>
+                            {/* Contact info */}
+                            <td style={{ padding: "10px 12px" }}>
+                              <div style={{ color: T.textMid, fontSize: "0.78rem" }}>{v.email}</div>
+                              {v.phone && <div style={{ color: T.textSoft, fontSize: "0.72rem" }}>{v.phone}</div>}
+                            </td>
+                            {/* Status */}
+                            <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                              <span style={{ background: v.status === "approved" ? "#DCFCE7" : v.status === "rejected" ? "#FEE2E2" : "#FEF3C7", color: v.status === "approved" ? "#166534" : v.status === "rejected" ? T.warn : "#92400E", borderRadius: "5px", padding: "3px 9px", fontSize: "0.72rem", fontWeight: 700 }}>
+                                {v.status === "approved" ? "✅ Approved" : v.status === "rejected" ? "❌ Rejected" : "⏳ Pending"}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </Section>
+              )}
+              {/* Vendor comments summary */}
+              {allVendors.filter(v => v.comments).length > 0 && (
+                <div style={{ marginTop: "16px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "10px", padding: "14px 16px" }}>
+                  <div style={{ color: "#1D4ED8", fontWeight: 700, fontSize: "0.78rem", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.06em" }}>💬 Vendor Notes &amp; Special Requests</div>
+                  {allVendors.filter(v => v.comments).map(v => (
+                    <div key={v.id} style={{ marginBottom: "6px", fontSize: "0.82rem" }}>
+                      <span style={{ color: T.textMid, fontWeight: 700 }}>{v.businessName}:</span>{" "}
+                      <span style={{ color: T.textSoft }}>{v.comments}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
+
+          {/* ── TICKET ROSTER ── */}
+          <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "20px", gridColumn: "1 / -1" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+              <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.05rem", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>🎟️ Ticket Roster</h3>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ background: T.green5, color: T.green1, borderRadius: "6px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700 }}>{activeTickets.length} tickets sold</span>
+                <span style={{ background: checkedInCount > 0 ? "#DCFCE7" : T.cream, color: checkedInCount > 0 ? "#166534" : T.stoneL, borderRadius: "6px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700 }}>
+                  🏁 {checkedInCount}/{activeTickets.length} checked in
+                </span>
+                {/* CSV Export */}
+                <button onClick={() => {
+                  const rows = [["Ticket ID","Order","Name","Email","Phone","Tier","Qty","Total","Booked","Checked In","Check-In Time"]];
+                  activeTickets.forEach(t => rows.push([t.ticketId, t.orderNum, t.buyerName, t.buyerEmail, t.buyerPhone, t.tierName, t.qty, `$${(t.total||0).toFixed(2)}`, t.bookedOn, t.checkedIn ? "Yes" : "No", t.checkinTime || ""]));
+                  const csv = rows.map(r => r.map(c => `"${(c||"").toString().replace(/"/g,'""')}"`).join(",")).join("\n");
+                  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `${ev.title.replace(/\s+/g,"_")}_tickets.csv`; a.click();
+                }} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
+                  ⬇ Export CSV
+                </button>
+              </div>
+            </div>
+            <input placeholder="Search by name, email, ticket ID, phone…" value={ticketSearch} onChange={e => setTicketSearch(e.target.value)}
+              style={{ padding: "9px 14px", borderRadius: "9px", border: `1px solid ${T.border}`, fontFamily: "inherit", fontSize: "0.85rem", width: "100%", maxWidth: "340px", background: T.cream, marginBottom: "14px", outline: "none" }} />
+            {ticketsLoading ? (
+              <div style={{ textAlign: "center", padding: "2rem", color: T.stoneL }}>Loading tickets…</div>
+            ) : activeTickets.length === 0 ? (
+              <div style={{ color: T.stoneL, fontSize: "0.85rem", padding: "20px", textAlign: "center" }}>No tickets sold yet</div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                  <thead>
+                    <tr style={{ background: T.bgDeep }}>
+                      {["Check-In", "Name", "Email", "Phone", "Ticket ID", "Order #", "Tier", "Qty", "Total", "Booked On"].map(h => (
+                        <th key={h} style={{ color: T.green4, padding: "9px 12px", textAlign: "left", fontWeight: 700, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTickets.map((t, i) => (
+                      <tr key={t.id || t.ticketId} style={{ background: t.checkedIn ? "#F0FDF4" : i % 2 === 0 ? "#fff" : T.cream, borderBottom: `1px solid ${T.border}`, transition: "background 0.15s" }}>
+                        {/* Check-in */}
+                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-start" }}>
+                            <button onClick={() => handleTicketCheckin(t)}
+                              style={{ background: t.checkedIn ? T.green1 : "#E5E7EB", color: t.checkedIn ? "#fff" : T.stone, border: "none", borderRadius: "7px", padding: "5px 12px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.75rem", whiteSpace: "nowrap", transition: "all 0.15s" }}>
+                              {t.checkedIn ? "✓ In" : "Check In"}
+                            </button>
+                            {t.checkinTime && <span style={{ color: T.stoneL, fontSize: "0.68rem" }}>{t.checkinTime}</span>}
+                          </div>
+                        </td>
+                        {/* Name */}
+                        <td style={{ padding: "10px 12px" }}>
+                          <div style={{ color: T.text, fontWeight: 700 }}>{t.buyerName}</div>
+                        </td>
+                        {/* Email */}
+                        <td style={{ padding: "10px 12px", color: T.textMid }}>{t.buyerEmail}</td>
+                        {/* Phone */}
+                        <td style={{ padding: "10px 12px", color: T.textSoft, whiteSpace: "nowrap" }}>{t.buyerPhone || <span style={{ color: T.stoneL, fontStyle: "italic" }}>—</span>}</td>
+                        {/* Ticket ID */}
+                        <td style={{ padding: "10px 12px" }}>
+                          <span style={{ fontFamily: "monospace", fontSize: "0.78rem", color: T.textMid, background: T.bg, borderRadius: "4px", padding: "2px 6px" }}>{t.ticketId}</span>
+                        </td>
+                        {/* Order # */}
+                        <td style={{ padding: "10px 12px", color: T.textSoft, whiteSpace: "nowrap", fontFamily: "monospace", fontSize: "0.78rem" }}>{t.orderNum || "—"}</td>
+                        {/* Tier */}
+                        <td style={{ padding: "10px 12px" }}>
+                          <span style={{ background: T.green5, color: T.green1, borderRadius: "5px", padding: "2px 8px", fontSize: "0.7rem", fontWeight: 600, whiteSpace: "nowrap" }}>{t.tierName || "General"}</span>
+                        </td>
+                        {/* Qty */}
+                        <td style={{ padding: "10px 12px", textAlign: "center", color: T.textMid, fontWeight: 700 }}>{t.qty}</td>
+                        {/* Total */}
+                        <td style={{ padding: "10px 12px", color: t.total > 0 ? T.gold : T.stoneL, fontWeight: t.total > 0 ? 700 : 400, whiteSpace: "nowrap" }}>
+                          {t.total > 0 ? `$${t.total.toFixed(2)}` : "Free"}
+                        </td>
+                        {/* Booked On */}
+                        <td style={{ padding: "10px 12px", color: T.textSoft, whiteSpace: "nowrap" }}>{t.bookedOn}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {/* Totals footer */}
+                  <tfoot>
+                    <tr style={{ background: T.bgDeep, borderTop: `2px solid ${T.green3}40` }}>
+                      <td colSpan={7} style={{ padding: "10px 12px", color: T.green4, fontWeight: 700, fontSize: "0.78rem" }}>TOTALS</td>
+                      <td style={{ padding: "10px 12px", color: "#fff", fontWeight: 700, textAlign: "center" }}>{activeTickets.reduce((s, t) => s + (t.qty || 1), 0)}</td>
+                      <td style={{ padding: "10px 12px", color: T.gold, fontWeight: 700, whiteSpace: "nowrap" }}>${activeTickets.reduce((s, t) => s + (t.total || 0), 0).toFixed(2)}</td>
+                      <td style={{ padding: "10px 12px" }} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
 
           {/* ── WAITLIST ── */}
           {waitlist.length > 0 && (
@@ -7290,3 +7522,4 @@ export default function App() {
     </>
   );
 }
+  
