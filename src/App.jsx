@@ -1577,24 +1577,26 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
 
       const orderId = fetchedOrder.id;
 
-      // Create ticket records &mdash; one per cart item
-      const ticketInserts = cart.map(item => ({
-        ticket_id: genTicketId(),
-        order_id: orderId,
-        order_number: orderNum,
-        event_id: item.event.id,
-        event_title: item.event.title,
-        tier_id: item.tier.id,
-        tier_name: item.tier.name,
-        user_id: currentUser?.id || null,
-        buyer_name: buyerName,
-        buyer_email: checkoutInfo.email,
-        quantity: item.qty,
-        unit_price: item.tier.price,
-        total: item.tier.price * item.qty,
-        status: "confirmed",
-        checked_in: false,
-      }));
+      // Create ticket records — one row per individual ticket (not per cart item)
+      const ticketInserts = cart.flatMap(item =>
+        Array.from({ length: item.qty }, () => ({
+          ticket_id: genTicketId(),
+          order_id: orderId,
+          order_number: orderNum,
+          event_id: item.event.id,
+          event_title: item.event.title,
+          tier_id: item.tier.id,
+          tier_name: item.tier.name,
+          user_id: currentUser?.id || null,
+          buyer_name: buyerName,
+          buyer_email: checkoutInfo.email,
+          quantity: 1,
+          unit_price: item.tier.price,
+          total: item.tier.price,
+          status: "confirmed",
+          checked_in: false,
+        }))
+      );
 
       // Use raw fetch for ticket insert &mdash; bypasses custom client quirks
       const sessionToken = supabase.getSession()?.access_token || SUPABASE_ANON_KEY;
@@ -1657,8 +1659,16 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       const rKey = localStorage.getItem("nh_resend_key");
       if (rKey && checkoutInfo.email) {
         try {
-          // Build one ticket block per cart item (expanding qty into individual ticket rows)
+          // Build one ticket block per individual ticket (ticketInserts is already expanded to qty=1 each)
+          // Count total tickets per tier for "Ticket N of M" labels
+          const tierCounts = {};
+          newTickets.forEach(t => { const k = t.eventId + "_" + t.tierId; tierCounts[k] = (tierCounts[k] || 0) + 1; });
+          const tierIndexes = {};
           const ticketBlocks = newTickets.map(t => {
+            const k = t.eventId + "_" + t.tierId;
+            tierIndexes[k] = (tierIndexes[k] || 0) + 1;
+            const ticketNum = tierIndexes[k];
+            const tierTotal = tierCounts[k];
             const ev = cart.find(i => i.event.id === t.eventId)?.event || {};
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(t.ticketId)}&color=1C2B1A&bgcolor=F7F5F0`;
             const eventDate = ev.date ? new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "";
@@ -1685,7 +1695,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         ${eventDate ? `<div style="margin-bottom:10px"><div style="color:#9CA3AF;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Date &amp; Time</div><div style="color:#1C2B1A;font-weight:600;font-size:0.88rem">${eventDate}${eventTime ? " · " + eventTime : ""}</div></div>` : ""}
         ${ev.location ? `<div style="margin-bottom:10px"><div style="color:#9CA3AF;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Location</div><div style="color:#1C2B1A;font-weight:600;font-size:0.88rem">${ev.location}</div></div>` : ""}
         <div style="margin-bottom:10px"><div style="color:#9CA3AF;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Ticket Holder</div><div style="color:#1C2B1A;font-weight:600;font-size:0.88rem">${buyerName}</div></div>
-        <div style="margin-bottom:10px"><div style="color:#9CA3AF;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Qty</div><div style="color:#1C2B1A;font-weight:600;font-size:0.88rem">${t.qty} ticket${t.qty !== 1 ? "s" : ""}</div></div>
+        ${tierTotal > 1 ? `<div style="margin-bottom:10px"><div style="color:#9CA3AF;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Ticket</div><div style="color:#1C2B1A;font-weight:600;font-size:0.88rem">${ticketNum} of ${tierTotal}</div></div>` : ""}
       </div>
     </div>
     <!-- Ticket footer -->
@@ -3953,19 +3963,8 @@ function DetailView() {
               </div>
             </div>
           )}
-          {/* ── REVIEWS & RATINGS — only shown after event has ended ── */}
-          {isExpired(ev) ? (
-            <ReviewsSection ev={ev} />
-          ) : (
-            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "2rem", textAlign: "center" }}>
-              <div style={{ fontSize: "2rem", marginBottom: "10px" }}>⭐</div>
-              <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.05rem", margin: "0 0 6px" }}>Reviews</h3>
-              <p style={{ color: T.stoneL, fontSize: "0.85rem", margin: 0, lineHeight: 1.6 }}>
-                Reviews open after the event ends on <strong style={{ color: T.textMid }}>{fmt(ev.endDate || ev.startDate)}</strong>.<br />
-                Come back and share your experience!
-              </p>
-            </div>
-          )}
+          {/* ── REVIEWS & RATINGS — only shown the day after the event ends ── */}
+          {isExpired(ev) && <ReviewsSection ev={ev} />}
 
           {/* ── COMMUNITY PHOTOS ── */}
           <EventPhotoGallery eventId={ev.id} />
