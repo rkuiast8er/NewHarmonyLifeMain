@@ -2919,29 +2919,75 @@ function EventCard({ ev }) {
       onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 16px 48px rgba(44,106,79,0.18)"; }}
       onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}>
       <div onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ cursor: "pointer" }}>
-        <div style={{ height: "150px", position: "relative", overflow: "hidden" }}>
-          {fp ? <img src={fp} alt={ev.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ height: "100%", background: `linear-gradient(135deg,${ev.color}22,${ev.color}66)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3rem" }}>{catEmoji(ev.category)}</div>}
-          <div style={{ position: "absolute", top: "10px", left: "10px", background: ev.isPrivate ? "#6B3FA0" : ev.color, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.isPrivate ? "🔒 Private" : "Public"}</div>
-          {/* Interest heart — top right */}
-          <button onClick={e => { e.stopPropagation(); toggleInterest(ev.id, isInterested ? "interested" : isGoing ? "going" : "interested"); }}
-            title={isGoing ? "Going!" : isInterested ? "Interested" : "Mark interest"}
-            style={{ position: "absolute", top: "8px", right: "8px", width: "34px", height: "34px", borderRadius: "50%", background: (isGoing || isInterested) ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.35)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", backdropFilter: "blur(4px)", transition: "transform 0.15s, background 0.15s", zIndex: 2 }}
-            onMouseEnter={e => e.currentTarget.style.transform = "scale(1.15)"}
-            onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
-            {isGoing ? "✅" : isInterested ? "❤️" : "🤍"}
-          </button>
-          {ev.vendorInvite && <div style={{ position: "absolute", bottom: "10px", left: "10px", background: T.earth, color: "#fff", borderRadius: "6px", padding: "3px 8px", fontSize: "0.68rem", fontWeight: 700 }}>🛖 Vendors Welcome</div>}
-          {full && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: T.warn, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>SOLD OUT</div>}
-          {almostFull && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: "#D97706", color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>Only {spots} left!</div>}
-        </div>
-        <div style={{ padding: "14px 16px 6px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-            <div style={{ color: T.green1, fontSize: "0.75rem", fontWeight: 600 }}>
-              {dateRange(ev)}{multiDay(ev) && <span style={{ marginLeft: "6px", background: T.green5, color: T.green1, borderRadius: "4px", padding: "1px 6px", fontSize: "0.68rem" }}>Multi-day</span>}
+
+        {fp ? (
+          /* ── Photo banner mode ── */
+          <div style={{ height: "200px", position: "relative", overflow: "hidden" }}>
+            <img src={fp} alt={ev.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            {/* Gradient scrim so text is always readable */}
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.15) 55%, transparent 100%)" }} />
+            {/* Top badges */}
+            <div style={{ position: "absolute", top: "10px", left: "10px", background: ev.isPrivate ? "#6B3FA0" : ev.color, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.isPrivate ? "🔒 Private" : ev.category}</div>
+            {ev.vendorInvite && <div style={{ position: "absolute", top: "10px", left: ev.isPrivate ? "90px" : "80px", background: T.earth, color: "#fff", borderRadius: "6px", padding: "3px 8px", fontSize: "0.68rem", fontWeight: 700 }}>🛖 Vendors</div>}
+            {/* Interest heart */}
+            <button onClick={e => { e.stopPropagation(); toggleInterest(ev.id, isInterested ? "interested" : isGoing ? "going" : "interested"); }}
+              title={isGoing ? "Going!" : isInterested ? "Interested" : "Mark interest"}
+              style={{ position: "absolute", top: "8px", right: "8px", width: "34px", height: "34px", borderRadius: "50%", background: (isGoing || isInterested) ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.35)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", backdropFilter: "blur(4px)", transition: "transform 0.15s, background 0.15s", zIndex: 2 }}
+              onMouseEnter={e => e.currentTarget.style.transform = "scale(1.15)"}
+              onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
+              {isGoing ? "✅" : isInterested ? "❤️" : "🤍"}
+            </button>
+            {/* Title + meta overlaid at bottom of banner */}
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "12px 14px 10px" }}>
+              <h3 style={{ color: "#fff", fontSize: "1rem", fontWeight: 700, margin: "0 0 3px", lineHeight: 1.25, fontFamily: "'Lora',serif", textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>{ev.title}</h3>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.72rem", fontWeight: 600 }}>
+                  {dateRange(ev)}{ev.time ? ` · ${fmtTime(ev.time)}` : ""}
+                </div>
+                {(full || almostFull) && (
+                  <div style={{ background: full ? T.warn : "#D97706", color: "#fff", borderRadius: "5px", padding: "2px 8px", fontSize: "0.65rem", fontWeight: 700 }}>
+                    {full ? "SOLD OUT" : `Only ${spots} left!`}
+                  </div>
+                )}
+              </div>
             </div>
-            {ev.time && <div style={{ color: T.stoneL, fontSize: "0.7rem" }}>{fmtTime(ev.time)}</div>}
           </div>
-          <h3 style={{ color: T.text, fontSize: "1rem", fontWeight: 700, margin: "0 0 4px", lineHeight: 1.3, fontFamily: "'Lora',serif" }}>{ev.title}</h3>
+        ) : (
+          /* ── No-photo mode (unchanged) ── */
+          <div style={{ height: "150px", position: "relative", overflow: "hidden" }}>
+            <div style={{ height: "100%", background: `linear-gradient(135deg,${ev.color}22,${ev.color}66)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3rem" }}>{catEmoji(ev.category)}</div>
+            <div style={{ position: "absolute", top: "10px", left: "10px", background: ev.isPrivate ? "#6B3FA0" : ev.color, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.isPrivate ? "🔒 Private" : "Public"}</div>
+            <button onClick={e => { e.stopPropagation(); toggleInterest(ev.id, isInterested ? "interested" : isGoing ? "going" : "interested"); }}
+              title={isGoing ? "Going!" : isInterested ? "Interested" : "Mark interest"}
+              style={{ position: "absolute", top: "8px", right: "8px", width: "34px", height: "34px", borderRadius: "50%", background: (isGoing || isInterested) ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.35)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", backdropFilter: "blur(4px)", transition: "transform 0.15s, background 0.15s", zIndex: 2 }}
+              onMouseEnter={e => e.currentTarget.style.transform = "scale(1.15)"}
+              onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
+              {isGoing ? "✅" : isInterested ? "❤️" : "🤍"}
+            </button>
+            {ev.vendorInvite && <div style={{ position: "absolute", bottom: "10px", left: "10px", background: T.earth, color: "#fff", borderRadius: "6px", padding: "3px 8px", fontSize: "0.68rem", fontWeight: 700 }}>🛖 Vendors Welcome</div>}
+            {full && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: T.warn, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>SOLD OUT</div>}
+            {almostFull && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: "#D97706", color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>Only {spots} left!</div>}
+          </div>
+        )}
+
+        <div style={{ padding: fp ? "10px 16px 6px" : "14px 16px 6px" }}>
+          {/* Only show title/date row when no photo (photo mode overlays them) */}
+          {!fp && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                <div style={{ color: T.green1, fontSize: "0.75rem", fontWeight: 600 }}>
+                  {dateRange(ev)}{multiDay(ev) && <span style={{ marginLeft: "6px", background: T.green5, color: T.green1, borderRadius: "4px", padding: "1px 6px", fontSize: "0.68rem" }}>Multi-day</span>}
+                </div>
+                {ev.time && <div style={{ color: T.stoneL, fontSize: "0.7rem" }}>{fmtTime(ev.time)}</div>}
+              </div>
+              <h3 style={{ color: T.text, fontSize: "1rem", fontWeight: 700, margin: "0 0 4px", lineHeight: 1.3, fontFamily: "'Lora',serif" }}>{ev.title}</h3>
+            </>
+          )}
+          {fp && multiDay(ev) && (
+            <div style={{ marginBottom: "4px" }}>
+              <span style={{ background: T.green5, color: T.green1, borderRadius: "4px", padding: "1px 6px", fontSize: "0.68rem" }}>Multi-day</span>
+            </div>
+          )}
           <div style={{ color: T.textSoft, fontSize: "0.78rem", marginBottom: "4px" }}>📍 {ev.location}</div>
           {/* Social signals row */}
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "5px", flexWrap: "wrap" }}>
