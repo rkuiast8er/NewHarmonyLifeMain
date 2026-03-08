@@ -714,6 +714,8 @@ function AppProvider({ children }) {
   const loadEvents = async () => {
     const { data: evData } = await supabase.from("events").select("*").order("start_date", { ascending: true });
     if (!evData) return;
+    // Diagnostic: log first event's photos field to confirm Supabase is returning it
+    if (evData.length > 0) console.log("[NH] First event photos field:", evData[0].photos, "| type:", typeof evData[0].photos);
     const { data: tiers } = await supabase.from("ticket_tiers").select("*").order("sort_order", { ascending: true });
     const { data: vendors } = await supabase.from("vendors").select("*");
     const { data: waitlist } = await supabase.from("waitlist").select("*");
@@ -1655,7 +1657,9 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       const oldSold = oldEvent ? (oldEvent.ticketTiers?.reduce((s, t) => s + t.sold, 0) || oldEvent.registered || 0) : 0;
       const oldSpotsLeft = Math.max(0, oldCapacity - oldSold);
 
-      await supabase.from("events").update(evPayload).eq("id", editingId);
+      const { error: updateErr } = await supabase.from("events").update(evPayload).eq("id", editingId);
+      if (updateErr) { console.error("Event update error:", updateErr); showToast("Save error: " + updateErr.message, "warn"); return; }
+      console.log("[NH] Saved photos count:", (evPayload.photos || []).length, "| first 80 chars:", (evPayload.photos?.[0] || "").slice(0, 80));
       // Delete old tiers and re-insert
       await supabase.from("ticket_tiers").delete().eq("event_id", editingId);
       if (tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: editingId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: totalCap, sold: t.sold || 0, sort_order: i })));
@@ -1776,7 +1780,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
 
       showToast("Event updated ✓");
     } else {
-      const { data: newEv } = await supabase.from("events").insert({ ...evPayload, registered: 0 });
+      const { data: newEv, error: insertErr } = await supabase.from("events").insert({ ...evPayload, registered: 0 }).select();
+      if (insertErr) { console.error("Event insert error:", insertErr); showToast("Save error: " + insertErr.message, "warn"); return; }
       const newId = newEv?.[0]?.id;
       if (newId && tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: newId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: totalCap, sold: 0, sort_order: i })));
       // If private, store the generated token back in form state so the copy-link UI shows immediately
