@@ -2282,7 +2282,7 @@ function TermsModal({ onClose }) {
           {[
             {
               heading: "1. Acceptance of Terms",
-              body: "By creating an account or using New Harmony Life Events (the "Service"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the Service.",
+              body: 'By creating an account or using New Harmony Life Events (the "Service"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the Service.',
             },
             {
               heading: "2. Who We Are",
