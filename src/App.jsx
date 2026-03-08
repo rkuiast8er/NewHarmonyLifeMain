@@ -228,7 +228,7 @@ const EMPTY_VENDOR_APP = {
   vendorType: "Produce & Vegetables", otherType: "",
   description: "", spaceNeeded: "Small &ndash; 3 ft table", yearsInBusiness: "",
   hasPermit: false, electricNeeded: false, tentOwned: false,
-  boothNeighborPref: "", website: "", instagram: "", comments: "", photo: null,
+  boothNeighborPref: "", website: "", instagram: "", comments: "", photo: null, photos: [],
   d1: false, d2: false, d3: false, d4: false, d5: false,
   communityOptIn: false,
 };
@@ -993,19 +993,45 @@ function AppProvider({ children }) {
   };
   const handleSignup = async () => {
     if (!validateAuth()) return;
+    setAuthErrors({});
     const { data, error } = await supabase.auth.signUp({
       email: authForm.email, password: authForm.password,
       options: { data: { first_name: authForm.firstName, last_name: authForm.lastName, phone: authForm.phone, city: authForm.city, state: authForm.state } },
     });
     if (error) { setAuthErrors({ email: error.message }); return; }
+
+    // Supabase may require email confirmation — check if a session was actually granted
+    const hasSession = !!(data?.session?.access_token);
+
     if (data?.user) {
-      const profile = { id: data.user.id, first_name: authForm.firstName, last_name: authForm.lastName, email: authForm.email, phone: authForm.phone, city: authForm.city, state: authForm.state, avatar_color: "#40916C", is_admin: false, email_opt_in: authForm.emailOptIn };
-      // Write profile row so login and updateProfile work correctly
-      await supabase.from("profiles").insert(profile);
-      setCurrentUser(profile);
+      const profile = {
+        id: data.user.id,
+        first_name: authForm.firstName, last_name: authForm.lastName,
+        email: authForm.email, phone: authForm.phone,
+        city: authForm.city, state: authForm.state,
+        avatar_color: "#40916C", is_admin: false,
+        email_opt_in: authForm.emailOptIn,
+      };
+
+      if (hasSession) {
+        // Session is live — insert profile and log them in immediately
+        const { error: profileError } = await supabase.from("profiles").insert(profile);
+        if (profileError && !profileError.message?.includes("duplicate")) {
+          console.warn("Profile insert failed:", profileError.message);
+          // Non-fatal: user is still created in auth, they can log in
+        }
+        setCurrentUser(profile);
+        setAuthModal(null);
+        showToast(`🌿 Welcome to New Harmony, ${authForm.firstName}!`);
+      } else {
+        // Email confirmation required — show a clear message instead of closing silently
+        setAuthModal(null);
+        showToast(`📬 Check your email to confirm your account, then sign in!`);
+      }
+    } else {
+      // No user returned at all — something unexpected happened
+      setAuthErrors({ email: "Something went wrong. Please try again." });
     }
-    setAuthModal(null);
-    showToast(`🌿 Welcome to New Harmony, ${authForm.firstName}!`);
   };
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -1923,7 +1949,21 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     setForm(f => ({ ...f, photos: [...(f.photos || []), ...urls] }));
   };
   const removePhoto = idx => setForm(f => ({ ...f, photos: f.photos.filter((_, i) => i !== idx) }));
-  const handleVendorPhoto = async (files) => { if (!files || !files.length) return; const url = await compressImage(files[0], 800, 0.8); setVendorForm(f => ({ ...f, photo: url })); };
+  const handleVendorPhoto = async (files) => {
+    if (!files || !files.length) return;
+    const url = await compressImage(files[0], 800, 0.8);
+    setVendorForm(f => {
+      const existing = f.photos || [];
+      if (existing.length >= 3) return f;
+      return { ...f, photo: f.photo || url, photos: [...existing, url] };
+    });
+  };
+  const removeVendorPhoto = (idx) => {
+    setVendorForm(f => {
+      const updated = (f.photos || []).filter((_, i) => i !== idx);
+      return { ...f, photos: updated, photo: updated[0] || null };
+    });
+  };
 
   // ─── VENDORS ───────────────────────────────────────────────────────────────
   const validateVendor = () => {
@@ -1951,7 +1991,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       has_permit: vendorForm.hasPermit, electric_needed: vendorForm.electricNeeded,
       tent_owned: vendorForm.tentOwned, website: vendorForm.website,
       instagram: vendorForm.instagram, comments: vendorForm.comments,
-      photo: vendorForm.photo || null, status: "pending",
+      photo: vendorForm.photo || null,
+      photos: vendorForm.photos || [], status: "pending",
       community_opt_in: vendorForm.communityOptIn || false,
     });
     await loadEvents();
@@ -1999,6 +2040,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         website: prefill.website || "",
         instagram: prefill.instagram || "",
         photo: prefill.photo || null,
+        photos: prefill.photos || (prefill.photo ? [prefill.photo] : []),
         communityOptIn: prefill.communityOptIn || false,
         // Always reset agreements and event-specific fields
         d1: false, d2: false, d3: false, d4: false, d5: false,
@@ -2080,7 +2122,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     installPrompt, setInstallPrompt, isInstalled, isOnline,
     openCheckout, validateCheckoutInfo, validatePayment, completeOrder,
     handleSave, startEdit, handleDelete, duplicateEvent,
-    handlePhotoAdd, removePhoto, handleVendorPhoto,
+    handlePhotoAdd, removePhoto, handleVendorPhoto, removeVendorPhoto,
     validateVendor, submitVendorApp, openVendorModal, updateVendorStatus,
     loadEvents,
     // New features
@@ -2541,8 +2583,19 @@ function TermsModal({ onClose }) {
 function AuthModal() {
   const { authModal, setAuthModal, authMode, setAuthMode, authForm, setAuthForm, authErrors, setAuthErrors, handleLogin, handleSignup } = useApp();
   const [showTerms, setShowTerms] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   if (!authModal) return null;
   const isSignup = authMode === "signup";
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      if (isSignup) await handleSignup();
+      else await handleLogin();
+    } finally {
+      setSubmitting(false);
+    }
+  };
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
       <div style={{ background: T.bgCard, borderRadius: "20px", padding: "2.5rem", width: "100%", maxWidth: "440px", position: "relative", boxShadow: "0 24px 70px rgba(0,0,0,0.3)" }}>
@@ -2572,8 +2625,8 @@ function AuthModal() {
             </>
           )}
           <Field label="Email Address *" error={authErrors.email}><input type="email" value={authForm.email} onChange={e => setAuthForm({ ...authForm, email: e.target.value })} style={inp(authErrors.email)} placeholder="you@example.com" /></Field>
-          <Field label="Password *" error={authErrors.password}><PasswordInput value={authForm.password} onChange={e => setAuthForm({ ...authForm, password: e.target.value })} style={inp(authErrors.password)} placeholder={isSignup ? "6+ characters" : "Your password"} onKeyDown={e => { if (e.key === "Enter") { isSignup ? handleSignup() : handleLogin(); } }} /></Field>
-          {isSignup && <Field label="Confirm Password *" error={authErrors.confirm}><PasswordInput value={authForm.confirm} onChange={e => setAuthForm({ ...authForm, confirm: e.target.value })} style={inp(authErrors.confirm)} placeholder="Re-enter password" onKeyDown={e => { if (e.key === "Enter") handleSignup(); }} /></Field>}
+          <Field label="Password *" error={authErrors.password}><PasswordInput value={authForm.password} onChange={e => setAuthForm({ ...authForm, password: e.target.value })} style={inp(authErrors.password)} placeholder={isSignup ? "6+ characters" : "Your password"} onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }} /></Field>
+          {isSignup && <Field label="Confirm Password *" error={authErrors.confirm}><PasswordInput value={authForm.confirm} onChange={e => setAuthForm({ ...authForm, confirm: e.target.value })} style={inp(authErrors.confirm)} placeholder="Re-enter password" onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }} /></Field>}
 
           {/* Email opt-in toggle */}
           {isSignup && (
@@ -2610,8 +2663,8 @@ function AuthModal() {
           )}
         </div>
         {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
-        <button onClick={isSignup ? handleSignup : handleLogin} style={{ width: "100%", marginTop: "1.25rem", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 18px ${T.green1}44` }}>
-          {isSignup ? "Create My Account 🌿" : "Sign In →"}
+        <button onClick={handleSubmit} disabled={submitting} style={{ width: "100%", marginTop: "1.25rem", background: submitting ? T.green2 : `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "12px", padding: "14px", fontSize: "1rem", fontWeight: 700, cursor: submitting ? "wait" : "pointer", fontFamily: "inherit", boxShadow: `0 4px 18px ${T.green1}44`, opacity: submitting ? 0.8 : 1, transition: "opacity 0.15s" }}>
+          {submitting ? (isSignup ? "Creating Account…" : "Signing In…") : (isSignup ? "Create My Account 🌿" : "Sign In →")}
         </button>
         {!isSignup && (
           <>
@@ -2631,7 +2684,7 @@ function AuthModal() {
 
 // ─── VENDOR MODAL ─────────────────────────────────────────────────────────────
 function VendorModal() {
-  const { vendorModal, setVendorModal, vendorForm, setVendorForm, vendorErrors, vendorSubmitted, vendorPhotoRef, handleVendorPhoto, submitVendorApp, events, currentUser } = useApp();
+  const { vendorModal, setVendorModal, vendorForm, setVendorForm, vendorErrors, vendorSubmitted, vendorPhotoRef, handleVendorPhoto, removeVendorPhoto, submitVendorApp, events, currentUser } = useApp();
   if (!vendorModal) return null;
   const ev = events.find(e => e.id === vendorModal);
   const allAgreed = DISCLAIMERS.every(d => vendorForm[d.key]);
@@ -2652,18 +2705,13 @@ function VendorModal() {
         ) : (
           <>
             <div style={{ position: "relative", minHeight: "160px", background: `linear-gradient(135deg,${T.earth}CC,${T.bgDeep})`, display: "flex", alignItems: "flex-end", overflow: "hidden" }}>
-              {vendorForm.photo && <img src={vendorForm.photo} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.35 }} />}
+              {(vendorForm.photos && vendorForm.photos.length > 0) && <img src={vendorForm.photos[0]} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.35 }} />}
               <div style={{ position: "relative", zIndex: 1, padding: "1.5rem 2rem", width: "100%" }}>
                 <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
                   <div>
                     <div style={{ display: "inline-block", background: T.earth, color: "#fff", borderRadius: "6px", padding: "3px 12px", fontSize: "0.72rem", fontWeight: 700, marginBottom: "8px" }}>🛖 CALL FOR VENDORS</div>
                     <h2 style={{ color: "#fff", fontFamily: "'Lora',serif", fontSize: "1.5rem", margin: "0 0 3px", textShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>Vendor Application</h2>
                     <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.85rem", margin: 0 }}>{ev?.title} · {dateRange(ev || {})}</p>
-                  </div>
-                  <div>
-                    <input ref={vendorPhotoRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleVendorPhoto(e.target.files)} />
-                    <button onClick={() => vendorPhotoRef.current.click()} style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: "10px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "6px" }}>📷 {vendorForm.photo ? "Change Photo" : "Add Business Photo"}</button>
-                    {vendorForm.photo && <button onClick={() => setVendorForm(f => ({ ...f, photo: null }))} style={{ marginTop: "6px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.7)", borderRadius: "8px", padding: "4px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.75rem", width: "100%" }}>Remove</button>}
                   </div>
                 </div>
               </div>
@@ -2721,8 +2769,52 @@ function VendorModal() {
                   </div>
                 </div>
               </div>
+              {/* ── Section 3: Photos of Goods & Services ── */}
               <div style={{ background: T.cream, borderRadius: "14px", padding: "18px", border: `1px solid ${T.border}` }}>
-                <div style={{ color: T.green1, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "14px" }}>3 · Setup Requirements</div>
+                <div style={{ color: T.green1, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "4px" }}>3 · Photos of Your Goods & Services</div>
+                <div style={{ color: T.stoneL, fontSize: "0.78rem", marginBottom: "14px", lineHeight: 1.5 }}>Add up to 3 photos showcasing your products. These help organizers and visitors get a feel for what you offer.</div>
+                <input ref={vendorPhotoRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleVendorPhoto(e.target.files)} />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+                  {[0, 1, 2].map(idx => {
+                    const photo = (vendorForm.photos || [])[idx];
+                    return (
+                      <div key={idx} style={{ aspectRatio: "1", borderRadius: "12px", overflow: "hidden", position: "relative", border: `2px dashed ${photo ? T.green3 : T.border}`, background: photo ? "transparent" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", cursor: photo ? "default" : "pointer", transition: "border-color 0.15s" }}
+                        onClick={() => { if (!photo && (vendorForm.photos || []).length < 3) vendorPhotoRef.current?.click(); }}
+                        onMouseEnter={e => { if (!photo) e.currentTarget.style.borderColor = T.green2; }}
+                        onMouseLeave={e => { if (!photo) e.currentTarget.style.borderColor = T.border; }}>
+                        {photo ? (
+                          <>
+                            <img src={photo} alt={`Product photo ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                            <button
+                              onClick={e => { e.stopPropagation(); removeVendorPhoto(idx); }}
+                              style={{ position: "absolute", top: "6px", right: "6px", background: "rgba(0,0,0,0.6)", border: "none", color: "#fff", borderRadius: "50%", width: "26px", height: "26px", cursor: "pointer", fontSize: "0.8rem", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}>✕</button>
+                            <div style={{ position: "absolute", bottom: "6px", left: "6px", background: "rgba(0,0,0,0.5)", color: "#fff", fontSize: "0.65rem", fontWeight: 700, borderRadius: "4px", padding: "2px 6px" }}>Photo {idx + 1}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: "1.6rem", marginBottom: "6px", opacity: 0.4 }}>📷</div>
+                            <div style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 600, textAlign: "center", lineHeight: 1.4 }}>
+                              {(vendorForm.photos || []).length > idx ? "Add photo" : idx === 0 ? "Add photo" : `Photo ${idx + 1}`}
+                            </div>
+                            {(vendorForm.photos || []).length === idx && (
+                              <div style={{ color: T.green2, fontSize: "0.68rem", marginTop: "3px" }}>Click to upload</div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {(vendorForm.photos || []).length > 0 && (
+                  <div style={{ marginTop: "10px", color: T.stoneL, fontSize: "0.75rem", textAlign: "center" }}>
+                    {(vendorForm.photos || []).length}/3 photo{(vendorForm.photos || []).length !== 1 ? "s" : ""} added
+                    {(vendorForm.photos || []).length < 3 && " · Click an empty slot to add more"}
+                  </div>
+                )}
+              </div>
+              {/* ── Section 4: Setup Requirements ── */}
+              <div style={{ background: T.cream, borderRadius: "14px", padding: "18px", border: `1px solid ${T.border}` }}>
+                <div style={{ color: T.green1, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "14px" }}>4 · Setup Requirements</div>
                 <div style={{ display: "grid", gap: "10px" }}>
                   {[["hasPermit", "I hold a valid food handler / vendor permit (if applicable)"], ["electricNeeded", "I require electrical access at my booth"], ["tentOwned", "I will bring my own canopy / tent"]].map(([key, label]) => (
                     <label key={key} style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", padding: "10px 14px", background: vendorForm[key] ? T.green5 : "#fff", border: `1px solid ${vendorForm[key] ? T.green3 : T.border}`, borderRadius: "10px" }}>
@@ -2759,7 +2851,7 @@ function VendorModal() {
               </div>
               <div style={{ background: "#FFF9F0", borderRadius: "14px", padding: "18px", border: `1px solid ${T.earthL}` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "8px" }}>
-                  <div style={{ color: T.earth, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>4 · Terms & Agreements</div>
+                  <div style={{ color: T.earth, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>5 · Terms & Agreements</div>
                   <div style={{ color: T.textSoft, fontSize: "0.75rem" }}>{DISCLAIMERS.filter(d => vendorForm[d.key]).length}/{DISCLAIMERS.length} agreed</div>
                 </div>
                 <div style={{ height: "5px", background: `${T.earthL}40`, borderRadius: "3px", marginBottom: "16px", overflow: "hidden" }}>
@@ -2988,7 +3080,7 @@ function TierPickerPopover({ ev, onClose }) {
 
 // ─── EVENT CARD ───────────────────────────────────────────────────────────────
 function EventCard({ ev }) {
-  const { setSelectedId, setView, toggleInterest, getInterest, currentUser, reviews } = useApp();
+  const { setSelectedId, setView, toggleInterest, getInterest, currentUser, reviews, vibeConfig } = useApp();
   const fp = ev.photos && ev.photos.length > 0 ? ev.photos[0] : null;
   const spots = spotsLeft(ev);
   const cap = totalCapacity(ev);
@@ -3098,10 +3190,10 @@ function EventCard({ ev }) {
           </div>
           {shortDesc && <p style={{ color: T.textSoft, fontSize: "0.78rem", lineHeight: 1.55, margin: "0 0 6px" }}>{shortDesc}</p>}
           {/* Vibe tag pills */}
-          {(ev.vibeTags || []).length > 0 && (
+          {vibeConfig.enabled && (ev.vibeTags || []).length > 0 && (
             <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "8px" }}>
               {(ev.vibeTags || []).slice(0, 4).map(vid => {
-                const vt = VIBE_TAGS.find(v => v.id === vid);
+                const vt = vibeConfig.items.find(v => v.id === vid) || VIBE_TAGS.find(v => v.id === vid);
                 return vt ? (
                   <span key={vid} style={{ background: T.green5, color: T.green1, borderRadius: "100px", padding: "2px 8px", fontSize: "0.68rem", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}>
                     {vt.emoji} {vt.label}
@@ -3582,7 +3674,7 @@ function QASection({ ev }) {
 
 // ─── DETAIL VIEW ──────────────────────────────────────────────────────────────
 function DetailView() {
-  const { selectedEvent, setView, setCartOpen, addToCart, openVendorModal, openAuth, isInCart, isReg, isOnWaitlist, joinWaitlist, leaveWaitlist, registerQty, setRegQty, currentUser, selectedTierId, setSelectedTierId, toggleInterest, getInterest, toggleFollow, following, copyReferralLink, showToast } = useApp();
+  const { selectedEvent, setView, setCartOpen, addToCart, openVendorModal, openAuth, isInCart, isReg, isOnWaitlist, joinWaitlist, leaveWaitlist, registerQty, setRegQty, currentUser, selectedTierId, setSelectedTierId, toggleInterest, getInterest, toggleFollow, following, copyReferralLink, showToast, vibeConfig, eventTypeConfig, categoryConfig } = useApp();
   const [privateInput, setPrivateInput] = React.useState("");
   const [privateUnlocked, setPrivateUnlocked] = React.useState(false);
   const [privateError, setPrivateError] = React.useState(false);
@@ -3644,12 +3736,13 @@ function DetailView() {
         <div style={{ flex: "1 1 520px", minWidth: 0 }}>
           <button onClick={() => { setView("discover"); window.scrollTo(0, 0); }} style={{ background: T.green5, border: `1px solid ${T.border}`, color: T.green1, borderRadius: "8px", padding: "8px 16px", cursor: "pointer", marginBottom: "1.5rem", fontFamily: "inherit", fontWeight: 600 }}>← Back to Events</button>
           <div style={{ display: "flex", gap: "8px", marginBottom: "1rem", flexWrap: "wrap" }}>
-            <span style={{ background: ev.color, color: "#fff", borderRadius: "6px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.category}</span>
+            {categoryConfig.enabled && <span style={{ background: ev.color, color: "#fff", borderRadius: "6px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.category}</span>}
             {ev.online && <span style={{ background: T.green2, color: "#fff", borderRadius: "6px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 700 }}>Online</span>}
             {multiDay(ev) && <span style={{ background: T.earth, color: "#fff", borderRadius: "6px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 700 }}>Multi-Day</span>}
             {ev.vendorInvite && <span style={{ background: T.earth, color: "#fff", borderRadius: "6px", padding: "4px 12px", fontSize: "0.75rem", fontWeight: 700 }}>🛖 Vendors Welcome</span>}
-            {(ev.tags || []).map(t => <span key={t} style={{ background: T.green5, color: T.green1, borderRadius: "6px", padding: "4px 10px", fontSize: "0.75rem" }}>#{t}</span>)}
-            {(ev.vibeTags || []).map(vid => { const vt = VIBE_TAGS.find(v => v.id === vid); return vt ? <span key={vid} style={{ background: T.bgCard, border: `1px solid ${T.green3}`, color: T.green4, borderRadius: "100px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 600 }}>{vt.emoji} {vt.label}</span> : null; })}
+            {eventTypeConfig.enabled && (ev.eventTypes || []).map(etid => { const et = eventTypeConfig.items.find(e => e.id === etid); return et ? <span key={etid} style={{ background: T.bgCard, border: `1px solid ${T.earth}55`, color: T.earth, borderRadius: "6px", padding: "4px 10px", fontSize: "0.75rem", fontWeight: 600 }}>{et.emoji} {et.label}</span> : null; })}
+            {categoryConfig.enabled && (ev.tags || []).map(t => <span key={t} style={{ background: T.green5, color: T.green1, borderRadius: "6px", padding: "4px 10px", fontSize: "0.75rem" }}>#{t}</span>)}
+            {vibeConfig.enabled && (ev.vibeTags || []).map(vid => { const vt = vibeConfig.items.find(v => v.id === vid) || VIBE_TAGS.find(v => v.id === vid); return vt ? <span key={vid} style={{ background: T.bgCard, border: `1px solid ${T.green3}`, color: T.green4, borderRadius: "100px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 600 }}>{vt.emoji} {vt.label}</span> : null; })}
           </div>
           <h1 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "clamp(1.8rem,4vw,2.5rem)", fontWeight: 700, margin: "0 0 1rem", lineHeight: 1.2 }}>{ev.title}</h1>
           {/* Recurring badge */}
@@ -5212,7 +5305,7 @@ function DashSettingsPanel() {
   );
   const StatusBadge = ({ on }) => (
     <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: on ? T.green5 : T.cream, border: `1px solid ${on ? T.green3 : T.border}`, borderRadius: "100px", padding: "3px 12px", fontSize: "0.75rem", fontWeight: 600, color: on ? T.green1 : T.stoneL, marginBottom: "18px" }}>
-      {on ? "✅ Showing on Discover" : "🔕 Hidden from Discover"}
+      {on ? "✅ Showing on Discover & Event Details" : "🔕 Hidden from Discover & Event Details"}
     </div>
   );
   const rowStyle = { display: "flex", alignItems: "center", gap: "8px", padding: "9px 12px", background: T.cream, borderRadius: "10px", border: `1px solid ${T.border}`, marginBottom: "6px" };
