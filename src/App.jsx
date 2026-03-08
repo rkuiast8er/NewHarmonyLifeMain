@@ -4062,16 +4062,60 @@ function CreateView() {
             </div>
           </section>
           <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px" }}>
-            <h3 style={{ color: T.green1, margin: "0 0 18px", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Photos</h3>
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
-              {(form.photos || []).map((p, i) => (
-                <div key={i} style={{ position: "relative", width: "88px", height: "68px" }}>
-                  <img src={p} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px", border: `2px solid ${T.border}` }} />
-                  <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: "-6px", right: "-6px", width: "20px", height: "20px", borderRadius: "50%", background: T.warn, border: "none", color: "#fff", cursor: "pointer", fontSize: "0.7rem", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✕</button>
+            <h3 style={{ color: T.green1, margin: "0 0 4px", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Photos</h3>
+            <p style={{ color: T.textSoft, fontSize: "0.8rem", margin: "0 0 16px", lineHeight: 1.5 }}>The first photo becomes the event banner shown on the detail page and event card. Add up to 8 photos.</p>
+
+            {/* Banner preview */}
+            {(form.photos || []).length > 0 ? (
+              <div style={{ position: "relative", width: "100%", height: "200px", borderRadius: "12px", overflow: "hidden", marginBottom: "14px", border: `2px solid ${T.green3}` }}>
+                <img src={form.photos[0]} alt="Event banner" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <div style={{ position: "absolute", top: "10px", left: "10px", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", color: "#fff", fontSize: "0.7rem", fontWeight: 700, borderRadius: "6px", padding: "3px 10px", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  🖼️ Banner Photo
                 </div>
-              ))}
-              {(form.photos || []).length < 8 && <button onClick={() => fileRef.current.click()} style={{ width: "88px", height: "68px", borderRadius: "8px", border: `2px dashed ${T.green3}`, background: T.green5, color: T.green1, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px", fontSize: "1.4rem" }}>+</button>}
-            </div>
+              </div>
+            ) : (
+              <div style={{ width: "100%", height: "160px", borderRadius: "12px", border: `2px dashed ${T.green3}`, background: T.green5, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "14px", cursor: "pointer" }}
+                onClick={() => fileRef.current.click()}>
+                <span style={{ fontSize: "2.2rem" }}>🖼️</span>
+                <span style={{ color: T.green1, fontWeight: 600, fontSize: "0.85rem" }}>Add a banner photo</span>
+                <span style={{ color: T.stoneL, fontSize: "0.75rem" }}>The first photo appears as the event banner</span>
+              </div>
+            )}
+
+            {/* Thumbnail strip */}
+            {(form.photos || []).length > 0 && (
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+                {(form.photos || []).map((p, i) => (
+                  <div key={i} style={{ position: "relative", width: "80px", height: "62px", flexShrink: 0 }}>
+                    <img src={p} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px", border: i === 0 ? `2px solid ${T.green2}` : `2px solid ${T.border}` }} />
+                    {/* Set as banner button — only show on non-first photos */}
+                    {i > 0 && (
+                      <button
+                        title="Set as banner"
+                        onClick={() => setForm(f => { const photos = [...f.photos]; const [moved] = photos.splice(i, 1); photos.unshift(moved); return { ...f, photos }; })}
+                        style={{ position: "absolute", bottom: "-6px", left: "50%", transform: "translateX(-50%)", background: T.green1, border: "none", color: "#fff", borderRadius: "5px", padding: "2px 6px", cursor: "pointer", fontSize: "0.58rem", fontWeight: 700, whiteSpace: "nowrap", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }}>
+                        Set banner
+                      </button>
+                    )}
+                    {i === 0 && (
+                      <div style={{ position: "absolute", bottom: "-6px", left: "50%", transform: "translateX(-50%)", background: T.green2, color: "#fff", borderRadius: "5px", padding: "2px 6px", fontSize: "0.58rem", fontWeight: 700, whiteSpace: "nowrap" }}>
+                        Banner
+                      </div>
+                    )}
+                    <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: "-6px", right: "-6px", width: "18px", height: "18px", borderRadius: "50%", background: T.warn, border: "none", color: "#fff", cursor: "pointer", fontSize: "0.65rem", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✕</button>
+                  </div>
+                ))}
+                {(form.photos || []).length < 8 && (
+                  <button onClick={() => fileRef.current.click()} style={{ width: "80px", height: "62px", borderRadius: "8px", border: `2px dashed ${T.green3}`, background: T.green5, color: T.green1, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px", fontSize: "1.4rem", flexShrink: 0 }}>+</button>
+                )}
+              </div>
+            )}
+
+            {(form.photos || []).length === 0 && (
+              <button onClick={() => fileRef.current.click()} style={{ width: "100%", background: T.green5, border: `1px solid ${T.green3}`, color: T.green1, borderRadius: "10px", padding: "10px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.85rem" }}>
+                + Add Photos
+              </button>
+            )}
             <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: "none" }} onChange={e => handlePhotoAdd(e.target.files)} />
           </section>
           <section style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px" }}>
