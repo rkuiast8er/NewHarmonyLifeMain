@@ -2896,18 +2896,15 @@ function TierPickerPopover({ ev, onClose }) {
 
 // ─── EVENT CARD ───────────────────────────────────────────────────────────────
 function EventCard({ ev }) {
-  const { setSelectedId, setView, addToCart, setCartOpen, isInCart, isReg, joinWaitlist, toggleInterest, getInterest, currentUser, reviews } = useApp();
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const full = spotsLeft(ev) === 0;
+  const { setSelectedId, setView, toggleInterest, getInterest, currentUser, reviews } = useApp();
   const fp = ev.photos && ev.photos.length > 0 ? ev.photos[0] : null;
-  const registered = isReg(ev.id);
   const spots = spotsLeft(ev);
   const cap = totalCapacity(ev);
   const sold = totalSold(ev);
   const pctFull = cap > 0 ? Math.min(100, Math.round((sold / cap) * 100)) : 0;
+  const full = spots === 0;
   const almostFull = spots > 0 && spots <= 10;
   const lowestPrice = ev.ticketTiers && ev.ticketTiers.length > 0 ? Math.min(...ev.ticketTiers.map(t => t.price)) : (ev.price || 0);
-  const anyInCart = (ev.ticketTiers || []).some(t => isInCart(ev.id, t.id)) || isInCart(ev.id);
   const shortDesc = ev.description && ev.description.length > 100 ? ev.description.slice(0, 97) + "…" : ev.description;
   const intr = getInterest(ev.id);
   const uid = currentUser?.id;
@@ -2925,7 +2922,7 @@ function EventCard({ ev }) {
         <div style={{ height: "150px", position: "relative", overflow: "hidden" }}>
           {fp ? <img src={fp} alt={ev.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ height: "100%", background: `linear-gradient(135deg,${ev.color}22,${ev.color}66)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3rem" }}>{catEmoji(ev.category)}</div>}
           <div style={{ position: "absolute", top: "10px", left: "10px", background: ev.isPrivate ? "#6B3FA0" : ev.color, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase" }}>{ev.isPrivate ? "🔒 Private" : "Public"}</div>
-          {/* Interest heart &mdash; top right */}
+          {/* Interest heart — top right */}
           <button onClick={e => { e.stopPropagation(); toggleInterest(ev.id, isInterested ? "interested" : isGoing ? "going" : "interested"); }}
             title={isGoing ? "Going!" : isInterested ? "Interested" : "Mark interest"}
             style={{ position: "absolute", top: "8px", right: "8px", width: "34px", height: "34px", borderRadius: "50%", background: (isGoing || isInterested) ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.35)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", backdropFilter: "blur(4px)", transition: "transform 0.15s, background 0.15s", zIndex: 2 }}
@@ -2934,8 +2931,8 @@ function EventCard({ ev }) {
             {isGoing ? "✅" : isInterested ? "❤️" : "🤍"}
           </button>
           {ev.vendorInvite && <div style={{ position: "absolute", bottom: "10px", left: "10px", background: T.earth, color: "#fff", borderRadius: "6px", padding: "3px 8px", fontSize: "0.68rem", fontWeight: 700 }}>🛖 Vendors Welcome</div>}
-          {full && !almostFull && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: T.warn, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>SOLD OUT</div>}
-          {almostFull && !full && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: "#D97706", color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>Only {spots} left!</div>}
+          {full && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: T.warn, color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>SOLD OUT</div>}
+          {almostFull && <div style={{ position: "absolute", bottom: "10px", right: "10px", background: "#D97706", color: "#fff", borderRadius: "6px", padding: "3px 10px", fontSize: "0.7rem", fontWeight: 700 }}>Only {spots} left!</div>}
         </div>
         <div style={{ padding: "14px 16px 6px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
@@ -2986,18 +2983,13 @@ function EventCard({ ev }) {
           </div>
         </div>
       </div>
-      <div style={{ padding: "8px 16px 14px", marginTop: "auto", position: "relative" }}>
-        {registered
-          ? <div style={{ background: T.green5, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px", textAlign: "center", color: T.green1, fontSize: "0.8rem", fontWeight: 700 }}>✓ Registered</div>
-          : anyInCart
-          ? <button onClick={e => { e.stopPropagation(); setCartOpen(true); }} style={{ width: "100%", background: T.earth, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>In Cart &mdash; View Cart 🛒</button>
-          : full
-          ? <button onClick={e => { e.stopPropagation(); joinWaitlist(ev.id); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.gold},#C8940F)`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>🔔 Join Waitlist</button>
-          : <button onClick={e => { e.stopPropagation(); setPickerOpen(true); }} style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{lowestPrice === 0 ? "Register Free 🌿" : "Add to Cart 🛒"}</button>
-        }
-        {pickerOpen && (
-          <TierPickerPopover ev={ev} onClose={() => setPickerOpen(false)} />
-        )}
+      {/* Details button */}
+      <div style={{ padding: "8px 16px 14px", marginTop: "auto" }}>
+        <button
+          onClick={() => { setSelectedId(ev.id); setView("detail"); }}
+          style={{ width: "100%", background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "9px", padding: "10px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.01em" }}>
+          Click for Details →
+        </button>
       </div>
     </div>
   );
