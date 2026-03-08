@@ -24,17 +24,31 @@ const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || "eyJhbGciOi
 
 // Lightweight Supabase client &mdash; no npm needed
 const supabase = (() => {
-  const headers = {
+  // REST API headers (PostgREST) — never sent to Auth endpoints
+  const restHeaders = {
     "apikey": SUPABASE_ANON_KEY,
     "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
     "Content-Type": "application/json",
     "Prefer": "return=representation",
   };
+  // Auth headers — no Prefer header, Auth server doesn't understand it
+  const authHeaders = {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+  };
   const url = (table, query = "") => `${SUPABASE_URL}/rest/v1/${table}${query}`;
   const authUrl = (path) => `${SUPABASE_URL}/auth/v1${path}`;
 
   const req = async (method, endpoint, body, extraHeaders = {}) => {
-    const res = await fetch(endpoint, { method, headers: { ...headers, ...extraHeaders }, body: body ? JSON.stringify(body) : undefined });
+    const res = await fetch(endpoint, { method, headers: { ...restHeaders, ...extraHeaders }, body: body ? JSON.stringify(body) : undefined });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || err.error_description || `HTTP ${res.status}`); }
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  };
+  const authReq = async (method, endpoint, body) => {
+    // Use auth-specific headers — no Prefer header, clean JSON only
+    const res = await fetch(endpoint, { method, headers: { ...authHeaders }, body: body ? JSON.stringify(body) : undefined });
     if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || err.error_description || `HTTP ${res.status}`); }
     const text = await res.text();
     return text ? JSON.parse(text) : null;
@@ -45,8 +59,11 @@ const supabase = (() => {
   const getSession = () => _session;
   const setSession = (s) => {
     _session = s;
-    if (s) { headers["Authorization"] = `Bearer ${s.access_token}`; localStorage.setItem("nh_session", JSON.stringify(s)); }
-    else { headers["Authorization"] = `Bearer ${SUPABASE_ANON_KEY}`; localStorage.removeItem("nh_session"); }
+    const token = s?.access_token || SUPABASE_ANON_KEY;
+    restHeaders["Authorization"] = `Bearer ${token}`;
+    authHeaders["Authorization"] = `Bearer ${token}`;
+    if (s) localStorage.setItem("nh_session", JSON.stringify(s));
+    else localStorage.removeItem("nh_session");
   };
   // Restore session from localStorage on load
   try { const s = localStorage.getItem("nh_session"); if (s) setSession(JSON.parse(s)); } catch (e) {}
@@ -56,24 +73,29 @@ const supabase = (() => {
     auth: {
       signUp: async ({ email, password, options }) => {
         try {
-          const raw = await req("POST", authUrl("/signup"), { email, password, data: options?.data });
-          // Normalise raw REST response into SDK shape: { data: { user, session }, error }
-          const user = raw?.user ?? (raw?.id ? raw : null);
+          const raw = await authReq("POST", authUrl("/signup"), { email, password, data: options?.data });
+          console.log("[NH signup] raw response:", JSON.stringify(raw).slice(0, 300));
+          // Supabase REST /signup returns user + token at top level when email confirm is off,
+          // or { id, email, ... } with no access_token when email confirmation is required.
+          const user = raw?.user ?? (raw?.id ? { id: raw.id, email: raw.email, user_metadata: raw.user_metadata || {} } : null);
           const session = raw?.access_token ? { access_token: raw.access_token, refresh_token: raw.refresh_token } : null;
-          if (session) setSession({ ...raw, user });
+          if (session) setSession({ ...session, user });
           return { data: { user, session }, error: null };
         } catch (e) {
+          console.error("[NH signup] error:", e.message);
           return { data: { user: null, session: null }, error: e };
         }
       },
       signInWithPassword: async ({ email, password }) => {
         try {
-          const data = await req("POST", authUrl("/token?grant_type=password"), { email, password });
-          if (data?.access_token) setSession(data);
-          return { data, error: null };
-        } catch (e) { return { data: null, error: e }; }
+          const raw = await authReq("POST", authUrl("/token?grant_type=password"), { email, password });
+          const user = raw?.user ?? (raw?.id ? { id: raw.id, email: raw.email, user_metadata: raw.user_metadata || {} } : null);
+          const session = raw?.access_token ? { access_token: raw.access_token, refresh_token: raw.refresh_token } : null;
+          if (session) setSession({ ...session, user });
+          return { data: { user, session }, error: null };
+        } catch (e) { return { data: { user: null, session: null }, error: e }; }
       },
-      signOut: async () => { try { await req("POST", authUrl("/logout"), {}); } catch (e) {} setSession(null); return { error: null }; },
+      signOut: async () => { try { await authReq("POST", authUrl("/logout"), {}); } catch (e) {} setSession(null); return { error: null }; },
       getUser: () => _session ? { data: { user: _session.user }, error: null } : { data: { user: null }, error: null },
     },
     from: (table) => ({
@@ -274,6 +296,13 @@ const fmt = (d) => {
   if (!d) return "";
   const dt = new Date(d + "T00:00:00");
   return dt.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
+};
+const fmtPhone = (val) => {
+  // Strip everything except digits
+  const digits = (val || "").replace(/\D/g, "").slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0,3)}-${digits.slice(3)}`;
+  return `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}`;
 };
 const fmtShort = (d) => {
   if (!d) return "";
@@ -981,20 +1010,22 @@ function AppProvider({ children }) {
     if (!validateAuth()) return;
     const { data, error } = await supabase.auth.signInWithPassword({ email: authForm.email, password: authForm.password });
     if (error) { setAuthErrors({ email: "Email or password is incorrect" }); return; }
+    const user = data?.user;
+    if (!user) { setAuthErrors({ email: "Login failed. Please try again." }); return; }
     try {
-      const { data: profile } = await supabase.from("profiles").select("*").eq("id", data.user.id).single();
+      const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (profile) {
-        setCurrentUser({ ...profile, email: data.user.email });
-        await loadMyTickets(data.user.id);
+        setCurrentUser({ ...profile, email: user.email });
+        await loadMyTickets(user.id);
         setAuthModal(null);
         showToast(`🌿 Welcome back, ${profile.first_name || ""}!`);
         return;
       }
     } catch (e) { console.warn("Profile fetch on login failed:", e); }
     // Fallback to metadata
-    const meta = data.user.user_metadata || {};
-    setCurrentUser({ id: data.user.id, email: data.user.email, first_name: meta.first_name || "", last_name: meta.last_name || "", phone: meta.phone || "", city: meta.city || "", state: meta.state || "", avatar_color: "#40916C", is_admin: false });
-    await loadMyTickets(data.user.id);
+    const meta = user.user_metadata || {};
+    setCurrentUser({ id: user.id, email: user.email, first_name: meta.first_name || "", last_name: meta.last_name || "", phone: meta.phone || "", city: meta.city || "", state: meta.state || "", avatar_color: "#40916C", is_admin: false });
+    await loadMyTickets(user.id);
     setAuthModal(null);
     showToast(`🌿 Welcome back!`);
   };
@@ -2625,7 +2656,7 @@ function AuthModal() {
                 <Field label="First Name *" error={authErrors.firstName}><input value={authForm.firstName} onChange={e => setAuthForm({ ...authForm, firstName: e.target.value })} style={inp(authErrors.firstName)} placeholder="Jane" /></Field>
                 <Field label="Last Name *" error={authErrors.lastName}><input value={authForm.lastName} onChange={e => setAuthForm({ ...authForm, lastName: e.target.value })} style={inp(authErrors.lastName)} placeholder="Doe" /></Field>
               </div>
-              <Field label="Phone *" error={authErrors.phone}><input value={authForm.phone} onChange={e => setAuthForm({ ...authForm, phone: e.target.value })} style={inp(authErrors.phone)} placeholder="555-000-0000" /></Field>
+              <Field label="Phone *" error={authErrors.phone}><input value={authForm.phone} onChange={e => setAuthForm({ ...authForm, phone: fmtPhone(e.target.value) })} style={inp(authErrors.phone)} placeholder="555-000-0000" maxLength={12} /></Field>
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
                 <Field label="City"><input value={authForm.city} onChange={e => setAuthForm({ ...authForm, city: e.target.value })} style={inp()} placeholder="Moville" /></Field>
                 <Field label="State"><input value={authForm.state} onChange={e => setAuthForm({ ...authForm, state: e.target.value })} style={inp()} placeholder="IA" /></Field>
@@ -2755,7 +2786,7 @@ function VendorModal() {
                   <Field label="Business / Farm Name *" error={vendorErrors.businessName}><input value={vendorForm.businessName} onChange={e => setVendorForm({ ...vendorForm, businessName: e.target.value })} style={inp(vendorErrors.businessName)} placeholder="e.g. Sunrise Acres" /></Field>
                   <Field label="Contact Name *" error={vendorErrors.contactName}><input value={vendorForm.contactName} onChange={e => setVendorForm({ ...vendorForm, contactName: e.target.value })} style={inp(vendorErrors.contactName)} placeholder="First & Last name" /></Field>
                   <Field label="Email *" error={vendorErrors.email}><input type="email" value={vendorForm.email} onChange={e => setVendorForm({ ...vendorForm, email: e.target.value })} style={inp(vendorErrors.email)} placeholder="you@example.com" /></Field>
-                  <Field label="Phone *" error={vendorErrors.phone}><input value={vendorForm.phone} onChange={e => setVendorForm({ ...vendorForm, phone: e.target.value })} style={inp(vendorErrors.phone)} placeholder="555-000-0000" /></Field>
+                  <Field label="Phone *" error={vendorErrors.phone}><input value={vendorForm.phone} onChange={e => setVendorForm({ ...vendorForm, phone: fmtPhone(e.target.value) })} style={inp(vendorErrors.phone)} placeholder="555-000-0000" maxLength={12} /></Field>
                   <Field label="City *" error={vendorErrors.city}><input value={vendorForm.city} onChange={e => setVendorForm({ ...vendorForm, city: e.target.value })} style={inp(vendorErrors.city)} placeholder="e.g. Moville" /></Field>
                   <Field label="State *" error={vendorErrors.state}><input value={vendorForm.state} onChange={e => setVendorForm({ ...vendorForm, state: e.target.value })} style={inp(vendorErrors.state)} placeholder="e.g. IA" /></Field>
                   <Field label="Website (optional)"><input value={vendorForm.website} onChange={e => setVendorForm({ ...vendorForm, website: e.target.value })} style={inp()} placeholder="www.yoursite.com" /></Field>
@@ -3826,8 +3857,19 @@ function DetailView() {
               </div>
             </div>
           )}
-          {/* ── REVIEWS & RATINGS ── */}
-          <ReviewsSection ev={ev} />
+          {/* ── REVIEWS & RATINGS — only shown after event has ended ── */}
+          {isExpired(ev) ? (
+            <ReviewsSection ev={ev} />
+          ) : (
+            <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "2rem", textAlign: "center" }}>
+              <div style={{ fontSize: "2rem", marginBottom: "10px" }}>⭐</div>
+              <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.05rem", margin: "0 0 6px" }}>Reviews</h3>
+              <p style={{ color: T.stoneL, fontSize: "0.85rem", margin: 0, lineHeight: 1.6 }}>
+                Reviews open after the event ends on <strong style={{ color: T.textMid }}>{fmt(ev.endDate || ev.startDate)}</strong>.<br />
+                Come back and share your experience!
+              </p>
+            </div>
+          )}
 
           {/* ── COMMUNITY PHOTOS ── */}
           <EventPhotoGallery eventId={ev.id} />
@@ -4126,7 +4168,7 @@ function CheckoutView() {
                     <Field label="Last Name *" error={checkoutErrors.lastName}><input value={checkoutInfo.lastName} onChange={e => setCheckoutInfo({ ...checkoutInfo, lastName: e.target.value })} style={inp(checkoutErrors.lastName)} placeholder="Doe" /></Field>
                   </div>
                   <Field label="Email Address *" error={checkoutErrors.email}><input type="email" value={checkoutInfo.email} onChange={e => setCheckoutInfo({ ...checkoutInfo, email: e.target.value })} style={inp(checkoutErrors.email)} placeholder="you@example.com" /></Field>
-                  <Field label="Phone Number *" error={checkoutErrors.phone}><input value={checkoutInfo.phone} onChange={e => setCheckoutInfo({ ...checkoutInfo, phone: e.target.value })} style={inp(checkoutErrors.phone)} placeholder="555-000-0000" /></Field>
+                  <Field label="Phone Number *" error={checkoutErrors.phone}><input value={checkoutInfo.phone} onChange={e => setCheckoutInfo({ ...checkoutInfo, phone: fmtPhone(e.target.value) })} style={inp(checkoutErrors.phone)} placeholder="555-000-0000" maxLength={12} /></Field>
                   {!onlyFree && <>
                     <Field label="Street Address"><input value={checkoutInfo.address} onChange={e => setCheckoutInfo({ ...checkoutInfo, address: e.target.value })} style={inp()} placeholder="123 Main St (optional)" /></Field>
                     <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "12px" }}>
@@ -4843,7 +4885,7 @@ function MyTicketsView() {
                     <input value={profileForm.lastName} onChange={e => setProfileForm(f => ({ ...f, lastName: e.target.value }))} style={inp()} />
                   </Field>
                   <Field label="Phone">
-                    <input value={profileForm.phone} onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))} placeholder="712-555-0000" style={inp()} />
+                    <input value={profileForm.phone} onChange={e => setProfileForm(f => ({ ...f, phone: fmtPhone(e.target.value) }))} placeholder="712-555-0000" style={inp()} maxLength={12} />
                   </Field>
                   <Field label="City">
                     <input value={profileForm.city} onChange={e => setProfileForm(f => ({ ...f, city: e.target.value }))} placeholder="Moville" style={inp()} />
