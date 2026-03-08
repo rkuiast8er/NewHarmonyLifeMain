@@ -2972,10 +2972,7 @@ function EventCard({ ev }) {
               })}
             </div>
           )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-            <div style={{ color: lowestPrice === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "0.95rem" }}>
-              {lowestPrice === 0 ? "Free" : (ev.ticketTiers && ev.ticketTiers.length > 1 ? `From $${lowestPrice}` : `$${lowestPrice}`)}
-            </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: "6px" }}>
             <div style={{ color: full ? T.warn : almostFull ? "#D97706" : T.stoneL, fontSize: "0.7rem", fontWeight: 600 }}>{full ? "Sold out" : `${spots} spot${spots !== 1 ? "s" : ""} left`}</div>
           </div>
           <div style={{ height: "4px", background: T.border, borderRadius: "2px", overflow: "hidden", marginBottom: "2px" }}>
