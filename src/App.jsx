@@ -724,8 +724,9 @@ function AppProvider({ children }) {
     if (!evData) return;
     // Diagnostic: log first event's photos field to confirm Supabase is returning it
     if (evData.length > 0) console.log("[NH] First event photos field:", evData[0].photos, "| type:", typeof evData[0].photos);
-    // Load locally-stored photos map (fallback for when Supabase can't store them)
+    // Load locally-stored photos and extended fields (fallback for missing Supabase columns)
     const localPhotosMap = localPhotosLoad();
+    const localExtMap = (() => { try { return JSON.parse(localStorage.getItem("nh_event_extended_v1") || "{}"); } catch { return {}; } })();
     const { data: tiers } = await supabase.from("ticket_tiers").select("*").order("sort_order", { ascending: true });
     const { data: vendors } = await supabase.from("vendors").select("*");
     const { data: waitlist } = await supabase.from("waitlist").select("*");
@@ -747,17 +748,17 @@ function AppProvider({ children }) {
       privatePassword: ev.private_password || "",
       inviteToken: ev.invite_token || "",
       recurring: ev.recurring || false,
-      recurringType: ev.recurring_type || "weekly",
-      recurringDay: String(ev.recurring_day || "0"),
-      recurringMonthDate: String(ev.recurring_month_date || "1"),
-      recurringWeekNum: String(ev.recurring_week_num || "1"),
-      recurringWeekDay: String(ev.recurring_week_day || "5"),
-      recurringEndDate: ev.recurring_end_date || "",
-      customQuestions: ev.custom_questions || [],
-      vibeTags: ev.vibe_tags || [],
-      eventTypes: ev.event_types || [],
-      refundPolicy: ev.refund_policy || "none",
-      refundDeadlineDays: ev.refund_deadline_days ?? 7,
+      recurringType: ev.recurring_type || localExtMap[ev.id]?.recurring_type || "weekly",
+      recurringDay: String(ev.recurring_day ?? localExtMap[ev.id]?.recurring_day ?? "0"),
+      recurringMonthDate: String(ev.recurring_month_date ?? localExtMap[ev.id]?.recurring_month_date ?? "1"),
+      recurringWeekNum: String(ev.recurring_week_num ?? localExtMap[ev.id]?.recurring_week_num ?? "1"),
+      recurringWeekDay: String(ev.recurring_week_day ?? localExtMap[ev.id]?.recurring_week_day ?? "5"),
+      recurringEndDate: ev.recurring_end_date || localExtMap[ev.id]?.recurring_end_date || "",
+      customQuestions: ev.custom_questions || localExtMap[ev.id]?.custom_questions || [],
+      vibeTags: ev.vibe_tags || localExtMap[ev.id]?.vibe_tags || [],
+      eventTypes: ev.event_types || localExtMap[ev.id]?.event_types || [],
+      refundPolicy: ev.refund_policy || localExtMap[ev.id]?.refund_policy || "none",
+      refundDeadlineDays: ev.refund_deadline_days ?? localExtMap[ev.id]?.refund_deadline_days ?? 7,
       ticketTiers: (tiers || []).filter(t => t.event_id === ev.id).map(t => ({
         id: t.id, name: t.name, description: t.description,
         price: parseFloat(t.price), capacity: t.capacity, sold: t.sold,
@@ -1626,19 +1627,38 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     setFormErrors(e);
     return !Object.keys(e).length;
   };
+
+  // Save extended fields (columns that may not exist yet) to localStorage
+  const LS_EXTENDED_KEY = "nh_event_extended_v1";
+  const saveExtended = (eventId, data) => {
+    try {
+      const m = JSON.parse(localStorage.getItem(LS_EXTENDED_KEY) || "{}");
+      m[eventId] = { ...(m[eventId] || {}), ...data };
+      localStorage.setItem(LS_EXTENDED_KEY, JSON.stringify(m));
+    } catch {}
+  };
+  const loadExtended = (eventId) => {
+    try {
+      const m = JSON.parse(localStorage.getItem(LS_EXTENDED_KEY) || "{}");
+      return m[eventId] || {};
+    } catch { return {}; }
+  };
+
   const handleSave = async () => {
     if (!validateEventForm()) return;
     const tags = form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
     const tiers = (form.ticketTiers || []);
     const totalCap = parseInt(form.capacity) || 50;
-    const evPayload = {
+
+    // Core payload — only columns that exist in a standard events table
+    const corePayload = {
       title: form.title, category: form.category,
       start_date: form.startDate, end_date: form.endDate || null,
       time: form.time, end_time: form.endTime,
       location: form.location, address: form.address,
       description: form.description, capacity: totalCap,
       color: form.color, organizer: form.organizer,
-      tags, online: form.online, photos: form.photos || [],
+      tags, online: form.online,
       vendor_invite: form.vendorInvite, show_vendors: form.showVendors,
       vendor_deadline: form.vendorDeadline || null,
       vendor_info: form.vendorInfo,
@@ -1648,6 +1668,10 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       private_password: form.isPrivate ? (form.privatePassword || "") : "",
       invite_token: form.isPrivate ? (form.inviteToken || Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10)) : "",
       recurring: form.recurring || false,
+    };
+
+    // Extended payload — columns added later that may not exist in all deployments
+    const extendedFields = {
       recurring_type: form.recurringType || "weekly",
       recurring_day: parseInt(form.recurringDay) || 0,
       recurring_month_date: parseInt(form.recurringMonthDate) || 1,
@@ -1660,17 +1684,34 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
       refund_policy: form.refundPolicy || "none",
       refund_deadline_days: parseInt(form.refundDeadlineDays) || 7,
     };
+
+    // Try full payload; if any column is missing fall back to core only
+    const tryPayload = async (id, payload, isInsert = false) => {
+      if (isInsert) {
+        const { data, error } = await supabase.from("events").insert({ ...payload, registered: 0 }).select();
+        return { data, error };
+      } else {
+        const { error } = await supabase.from("events").update(payload).eq("id", id);
+        return { error };
+      }
+    };
+
+    const fullPayload = { ...corePayload, ...extendedFields };
     if (editingId) {
-      // Snapshot old event state before saving so we can detect capacity increases
       const oldEvent = events.find(e => e.id === editingId);
       const oldCapacity = oldEvent ? (oldEvent.capacity || 0) : 0;
       const oldSold = oldEvent ? (oldEvent.ticketTiers?.reduce((s, t) => s + t.sold, 0) || oldEvent.registered || 0) : 0;
       const oldSpotsLeft = Math.max(0, oldCapacity - oldSold);
 
-      const { error: updateErr } = await supabase.from("events").update(evPayload).eq("id", editingId);
-      if (updateErr) { console.error("Event update error:", updateErr); showToast("Save error: " + updateErr.message, "warn"); return; }
-      console.log("[NH] Saved photos count:", (evPayload.photos || []).length, "| first 80 chars:", (evPayload.photos?.[0] || "").slice(0, 80));
-      // Always persist photos locally so they survive Supabase column type issues
+      // Try full payload; if a column is missing, retry with core only
+      let { error: updateErr } = await tryPayload(editingId, fullPayload);
+      if (updateErr) {
+        console.warn("Full payload failed, retrying with core only:", updateErr.message);
+        const { error: coreErr } = await tryPayload(editingId, corePayload);
+        if (coreErr) { showToast("Save error: " + coreErr.message, "warn"); return; }
+      }
+      // Always save extended fields + photos to localStorage
+      saveExtended(editingId, extendedFields);
       localPhotosSet(editingId, form.photos || []);
       // Delete old tiers and re-insert
       await supabase.from("ticket_tiers").delete().eq("event_id", editingId);
@@ -1792,11 +1833,20 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
 
       showToast("Event updated ✓");
     } else {
-      const { data: newEv, error: insertErr } = await supabase.from("events").insert({ ...evPayload, registered: 0 }).select();
-      if (insertErr) { console.error("Event insert error:", insertErr); showToast("Save error: " + insertErr.message, "warn"); return; }
+      // Try full payload; if a column is missing, retry with core only
+      let { data: newEv, error: insertErr } = await tryPayload(null, fullPayload, true);
+      if (insertErr) {
+        console.warn("Full insert failed, retrying with core only:", insertErr.message);
+        const res = await tryPayload(null, corePayload, true);
+        if (res.error) { showToast("Save error: " + res.error.message, "warn"); return; }
+        newEv = res.data;
+      }
       const newId = newEv?.[0]?.id;
-      // Persist photos locally keyed by the new event id
-      if (newId && (form.photos || []).length > 0) localPhotosSet(newId, form.photos);
+      // Save extended fields + photos to localStorage keyed by new event id
+      if (newId) {
+        saveExtended(newId, extendedFields);
+        if ((form.photos || []).length > 0) localPhotosSet(newId, form.photos);
+      }
       if (newId && tiers.length) await supabase.from("ticket_tiers").insert(tiers.map((t, i) => ({ event_id: newId, name: t.name, description: t.description || "", price: parseFloat(t.price) || 0, capacity: totalCap, sold: 0, sort_order: i })));
       // If private, store the generated token back in form state so the copy-link UI shows immediately
       if (form.isPrivate && evPayload.invite_token) {
