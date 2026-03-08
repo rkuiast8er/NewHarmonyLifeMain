@@ -5680,6 +5680,300 @@ function DashSettingsPanel() {
   );
 }
 
+// ─── ADMIN DETAIL VIEW ────────────────────────────────────────────────────────
+function AdminDetailView() {
+  const { selectedEvent, setView, setSelectedId, startEdit, handleDelete, duplicateEvent, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, showToast, getInterest, reviews, dashUnlocked } = useApp();
+  const ev = selectedEvent;
+
+  if (!ev || !dashUnlocked) { return null; }
+
+  const intr = getInterest(ev.id);
+  const evReviews = reviews[ev.id] || [];
+  const avgRating = evReviews.length > 0 ? (evReviews.reduce((s, r) => s + r.rating, 0) / evReviews.length) : 0;
+  const cap = totalCapacity(ev);
+  const sold = totalSold(ev);
+  const spots = spotsLeft(ev);
+  const pctFull = cap > 0 ? Math.min(100, Math.round((sold / cap) * 100)) : 0;
+  const revenue = (ev.ticketTiers || []).reduce((s, t) => s + t.price * t.sold, 0);
+  const approvedVendors = (ev.vendors || []).filter(v => v.status === "approved");
+  const pendingVendors = (ev.vendors || []).filter(v => v.status === "pending");
+  const allVendors = ev.vendors || [];
+  const waitlist = ev.waitlist || [];
+
+  const StatCard = ({ label, value, sub, color, icon }) => (
+    <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "16px 18px", minWidth: "130px" }}>
+      <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>{icon} {label}</div>
+      <div style={{ color: color || T.text, fontWeight: 700, fontSize: "1.5rem", fontFamily: "'Lora',serif", lineHeight: 1.1 }}>{value}</div>
+      {sub && <div style={{ color: T.stoneL, fontSize: "0.72rem", marginTop: "4px" }}>{sub}</div>}
+    </div>
+  );
+
+  const Section = ({ title, icon, children, accent }) => (
+    <div style={{ background: T.bgCard, border: `1px solid ${accent || T.border}`, borderRadius: "16px", padding: "22px", marginBottom: "20px" }}>
+      <h3 style={{ color: T.text, fontFamily: "'Lora',serif", fontSize: "1.05rem", margin: "0 0 16px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <span>{icon}</span> {title}
+      </h3>
+      {children}
+    </div>
+  );
+
+  const Field = ({ label, value, mono }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginBottom: "12px" }}>
+      <div style={{ color: T.stoneL, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+      <div style={{ color: T.textMid, fontSize: "0.875rem", lineHeight: 1.5, fontFamily: mono ? "monospace" : "inherit", wordBreak: "break-all" }}>{value || <span style={{ color: T.stoneL, fontStyle: "italic" }}>Not set</span>}</div>
+    </div>
+  );
+
+  const Badge = ({ label, color, bg }) => (
+    <span style={{ background: bg || T.green5, color: color || T.green1, borderRadius: "6px", padding: "3px 10px", fontSize: "0.72rem", fontWeight: 700, display: "inline-block", marginRight: "6px", marginBottom: "4px" }}>{label}</span>
+  );
+
+  return (
+    <div style={{ minHeight: "100vh", background: T.bg }}>
+      {/* Admin header banner */}
+      <div style={{ background: `linear-gradient(90deg,${T.bgDeep},${T.bgMid})`, borderBottom: `2px solid ${T.green3}`, padding: "14px 2rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", position: "sticky", top: "68px", zIndex: 100 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ background: `${T.green3}25`, border: `1px solid ${T.green3}50`, borderRadius: "8px", padding: "4px 10px", display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ color: T.green3, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>⚙️ Admin View</span>
+          </div>
+          <span style={{ color: "#fff", fontFamily: "'Lora',serif", fontWeight: 700, fontSize: "1rem" }}>{ev.title}</span>
+        </div>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>👁 Public View</button>
+          <button onClick={() => startEdit(ev)} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>✏️ Edit Event</button>
+          <button onClick={() => { if (window.confirm(`Send email reminders to all attendees of "${ev.title}"?`)) scheduleEventReminders(ev.id); }} style={{ background: `${T.green1}12`, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>📧 Remind</button>
+          {ev.isPrivate && ev.inviteToken && (
+            <button onClick={() => copyInviteLink(ev)} style={{ background: `${T.earth}12`, color: T.earth, border: `1px solid ${T.earthL}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>🔗 Invite Link</button>
+          )}
+          <button onClick={() => setView("dashboard")} style={{ background: "rgba(255,255,255,0.08)", color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontSize: "0.8rem" }}>← Dashboard</button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: "1060px", margin: "0 auto", padding: "2rem" }}>
+
+        {/* ── KPI STAT CARDS ── */}
+        <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginBottom: "24px" }}>
+          <StatCard icon="🎟️" label="Registered" value={sold} sub={`of ${cap} capacity`} color={pctFull >= 90 ? T.warn : T.green1} />
+          <StatCard icon="🪑" label="Spots Left" value={spots} sub={spots === 0 ? "SOLD OUT" : `${pctFull}% full`} color={spots === 0 ? T.warn : spots <= 10 ? "#D97706" : T.green2} />
+          <StatCard icon="💰" label="Revenue" value={`$${revenue.toLocaleString()}`} sub={(ev.ticketTiers||[]).filter(t => t.price > 0).length > 0 ? `${(ev.ticketTiers||[]).filter(t=>t.price>0).length} paid tier${(ev.ticketTiers||[]).filter(t=>t.price>0).length!==1?"s":""}` : "Free event"} color={T.gold} />
+          <StatCard icon="✅" label="Going" value={intr.going.length} sub={`${intr.interested.length} interested`} color={T.green2} />
+          {waitlist.length > 0 && <StatCard icon="⏳" label="Waitlist" value={waitlist.length} sub="waiting for spots" color="#D97706" />}
+          {avgRating > 0 && <StatCard icon="⭐" label="Avg Rating" value={avgRating.toFixed(1)} sub={`${evReviews.length} review${evReviews.length !== 1 ? "s" : ""}`} color={T.gold} />}
+        </div>
+
+        {/* Capacity bar */}
+        <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "12px", padding: "16px 20px", marginBottom: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+            <span style={{ color: T.textMid, fontWeight: 700, fontSize: "0.875rem" }}>Capacity Fill Rate</span>
+            <span style={{ color: pctFull >= 90 ? T.warn : pctFull >= 70 ? "#D97706" : T.green1, fontWeight: 700, fontSize: "0.875rem" }}>{pctFull}%</span>
+          </div>
+          <div style={{ height: "10px", background: T.border, borderRadius: "5px", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${pctFull}%`, background: pctFull >= 90 ? T.warn : pctFull >= 70 ? "#D97706" : T.green2, borderRadius: "5px", transition: "width 0.4s" }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px" }}>
+            <span style={{ color: T.stoneL, fontSize: "0.72rem" }}>{sold} registered</span>
+            <span style={{ color: T.stoneL, fontSize: "0.72rem" }}>{spots} spots remaining</span>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(440px, 1fr))", gap: "20px" }}>
+
+          {/* ── EVENT DETAILS ── */}
+          <Section title="Event Details" icon="📋">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 24px" }}>
+              <Field label="Title" value={ev.title} />
+              <Field label="Category" value={ev.category} />
+              <Field label="Start Date" value={fmt(ev.startDate)} />
+              <Field label="End Date" value={ev.endDate && ev.endDate !== ev.startDate ? fmt(ev.endDate) : "Same day"} />
+              <Field label="Start Time" value={fmtTime(ev.time)} />
+              <Field label="End Time" value={fmtTime(ev.endTime)} />
+              <Field label="Location" value={ev.location} />
+              <Field label="Address" value={ev.address} />
+              <Field label="Organizer" value={ev.organizer} />
+              <Field label="Format" value={ev.online ? "Online" : "In-Person"} />
+            </div>
+            {ev.description && (
+              <div style={{ marginTop: "4px" }}>
+                <div style={{ color: T.stoneL, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Description</div>
+                <div style={{ color: T.textMid, fontSize: "0.875rem", lineHeight: 1.65, background: T.cream, borderRadius: "8px", padding: "12px 14px" }}>{ev.description}</div>
+              </div>
+            )}
+            <div style={{ marginTop: "14px", display: "flex", flexWrap: "wrap", gap: "4px" }}>
+              <Badge label={ev.isPublic !== false ? "🌐 Public" : "🚫 Unlisted"} color={ev.isPublic !== false ? T.green1 : T.warn} bg={ev.isPublic !== false ? T.green5 : "#FEE2E2"} />
+              {ev.isPrivate && <Badge label="🔒 Password Protected" color="#6B3FA0" bg="#F3E8FF" />}
+              {ev.recurring && <Badge label={`🔁 ${getRecurringDescription(ev)}`} color={T.green1} />}
+              {ev.showAttendanceBar !== false ? <Badge label="📊 Attendance Bar: On" /> : <Badge label="📊 Attendance Bar: Off" color={T.stoneL} bg={T.bg} />}
+              {(ev.tags || []).map(t => <Badge key={t} label={`#${t}`} color={T.textSoft} bg={T.border} />)}
+            </div>
+          </Section>
+
+          {/* ── TICKET TIERS ── */}
+          <Section title="Ticket Tiers" icon="🎟️">
+            {(ev.ticketTiers || []).length === 0 ? (
+              <div style={{ color: T.stoneL, fontSize: "0.85rem" }}>No tiers configured</div>
+            ) : (ev.ticketTiers || []).map(tier => {
+              const tierPct = tier.capacity > 0 ? Math.min(100, Math.round((tier.sold / tier.capacity) * 100)) : 0;
+              return (
+                <div key={tier.id} style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "14px 16px", marginBottom: "10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                    <div>
+                      <div style={{ color: T.text, fontWeight: 700, fontSize: "0.925rem" }}>{tier.name}</div>
+                      {tier.description && <div style={{ color: T.textSoft, fontSize: "0.78rem", marginTop: "2px" }}>{tier.description}</div>}
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "12px" }}>
+                      <div style={{ color: tier.price === 0 ? T.green1 : T.text, fontWeight: 700, fontSize: "1rem" }}>{tier.price === 0 ? "Free" : `$${tier.price}`}</div>
+                      <div style={{ color: tier.price > 0 ? T.gold : T.stoneL, fontSize: "0.75rem", fontWeight: 600 }}>{tier.price > 0 ? `$${(tier.price * tier.sold).toLocaleString()} earned` : "No revenue"}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                    <span style={{ color: T.stoneL, fontSize: "0.72rem" }}>{tier.sold} sold of {tier.capacity}</span>
+                    <span style={{ color: T.stoneL, fontSize: "0.72rem" }}>{tierPct}%</span>
+                  </div>
+                  <div style={{ height: "5px", background: T.border, borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${tierPct}%`, background: tierPct >= 90 ? T.warn : tierPct >= 70 ? "#D97706" : T.green2, borderRadius: "3px" }} />
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ background: `${T.gold}12`, border: `1px solid ${T.gold}30`, borderRadius: "10px", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ color: T.textMid, fontWeight: 700, fontSize: "0.875rem" }}>Total Revenue</span>
+              <span style={{ color: T.gold, fontWeight: 700, fontSize: "1.15rem", fontFamily: "'Lora',serif" }}>${revenue.toLocaleString()}</span>
+            </div>
+          </Section>
+
+          {/* ── SETTINGS & CONFIGURATION ── */}
+          <Section title="Settings & Configuration" icon="⚙️">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 24px" }}>
+              <Field label="Profit Model" value={ev.profitModel === "sharing" ? `Revenue Sharing (Host: ${ev.hostPct}%)` : "Vendor Keeps All"} />
+              <Field label="Capacity" value={`${cap} total`} />
+              <Field label="Refund Policy" value={ev.refundPolicy === "none" ? "No Refunds" : ev.refundPolicy === "partial" ? `Partial (within ${ev.refundDeadlineDays}d)` : `Full (within ${ev.refundDeadlineDays}d)`} />
+              <Field label="Event Color" value={<span style={{ display: "inline-flex", alignItems: "center", gap: "7px" }}><span style={{ width: "14px", height: "14px", borderRadius: "3px", background: ev.color, display: "inline-block" }} />{ev.color}</span>} />
+            </div>
+            {ev.isPrivate && (
+              <div style={{ marginTop: "4px" }}>
+                <Field label="Event Password" value={ev.privatePassword || "(invite-link only)"} mono />
+                {ev.inviteToken && <Field label="Invite Token" value={ev.inviteToken} mono />}
+              </div>
+            )}
+          </Section>
+
+          {/* ── VENDOR APPLICATIONS ── */}
+          {ev.vendorInvite && (
+            <Section title={`Vendor Applications (${allVendors.length})`} icon="🛖" accent={`${T.earth}55`}>
+              <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
+                <Badge label={`✅ ${approvedVendors.length} Approved`} color="#166534" bg="#DCFCE7" />
+                <Badge label={`⏳ ${pendingVendors.length} Pending`} color="#92400E" bg="#FEF3C7" />
+                {allVendors.filter(v => v.status === "rejected").length > 0 && <Badge label={`❌ ${allVendors.filter(v=>v.status==="rejected").length} Rejected`} color={T.warn} bg="#FEE2E2" />}
+              </div>
+              {ev.vendorDeadline && <div style={{ color: T.earth, fontSize: "0.82rem", fontWeight: 600, marginBottom: "12px" }}>📅 Application Deadline: {fmt(ev.vendorDeadline)}</div>}
+              {allVendors.length === 0 ? (
+                <div style={{ color: T.stoneL, fontSize: "0.85rem" }}>No applications yet</div>
+              ) : allVendors.map(v => (
+                <div key={v.id} style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ color: T.text, fontWeight: 700, fontSize: "0.9rem" }}>{v.businessName}</div>
+                      <div style={{ color: T.stoneL, fontSize: "0.75rem" }}>{v.contactName} · {v.email}</div>
+                      <div style={{ color: T.textSoft, fontSize: "0.75rem", marginTop: "2px" }}>{v.vendorType} · {v.city}, {v.state}</div>
+                    </div>
+                    <Badge label={v.status === "approved" ? "✅ Approved" : v.status === "rejected" ? "❌ Rejected" : "⏳ Pending"} color={v.status === "approved" ? "#166534" : v.status === "rejected" ? T.warn : "#92400E"} bg={v.status === "approved" ? "#DCFCE7" : v.status === "rejected" ? "#FEE2E2" : "#FEF3C7"} />
+                  </div>
+                  {v.description && <div style={{ color: T.textSoft, fontSize: "0.78rem", marginTop: "6px", lineHeight: 1.5 }}>{v.description}</div>}
+                  <div style={{ display: "flex", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
+                    {v.spaceNeeded && <Badge label={`📐 ${v.spaceNeeded}`} color={T.textSoft} bg={T.border} />}
+                    {v.electricNeeded && <Badge label="⚡ Needs Power" color="#92400E" bg="#FEF3C7" />}
+                    {v.tentOwned && <Badge label="⛺ Has Tent" color={T.green1} bg={T.green5} />}
+                    {v.phone && <Badge label={`📞 ${v.phone}`} color={T.textSoft} bg={T.border} />}
+                  </div>
+                </div>
+              ))}
+            </Section>
+          )}
+
+          {/* ── WAITLIST ── */}
+          {waitlist.length > 0 && (
+            <Section title={`Waitlist (${waitlist.length})`} icon="⏳" accent="#FDE68A">
+              {waitlist.map((w, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", background: T.cream, borderRadius: "8px", marginBottom: "6px", border: `1px solid ${T.border}` }}>
+                  <div style={{ width: "22px", height: "22px", borderRadius: "50%", background: T.bgDeep, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.68rem", fontWeight: 700, flexShrink: 0 }}>#{i + 1}</div>
+                  <div>
+                    <div style={{ color: T.textMid, fontWeight: 600, fontSize: "0.875rem" }}>{w.name || w.email || "Anonymous"}</div>
+                    {w.email && w.name && <div style={{ color: T.stoneL, fontSize: "0.75rem" }}>{w.email}</div>}
+                  </div>
+                  {w.joinedAt && <div style={{ color: T.stoneL, fontSize: "0.72rem", marginLeft: "auto" }}>{new Date(w.joinedAt).toLocaleDateString()}</div>}
+                </div>
+              ))}
+            </Section>
+          )}
+
+          {/* ── INTEREST & SOCIAL ── */}
+          <Section title="Interest & Social" icon="📣">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+              <div style={{ background: T.green5, borderRadius: "10px", padding: "14px", textAlign: "center" }}>
+                <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "4px" }}>Going</div>
+                <div style={{ color: T.green1, fontWeight: 700, fontSize: "1.8rem", fontFamily: "'Lora',serif" }}>{intr.going.length}</div>
+              </div>
+              <div style={{ background: "#FFF8E7", border: `1px solid ${T.gold}30`, borderRadius: "10px", padding: "14px", textAlign: "center" }}>
+                <div style={{ color: T.stoneL, fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", marginBottom: "4px" }}>Interested</div>
+                <div style={{ color: T.gold, fontWeight: 700, fontSize: "1.8rem", fontFamily: "'Lora',serif" }}>{intr.interested.length}</div>
+              </div>
+            </div>
+            {avgRating > 0 && (
+              <div style={{ background: T.cream, borderRadius: "10px", padding: "12px 14px", display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ color: "#F59E0B", fontSize: "1.5rem" }}>★</div>
+                <div>
+                  <div style={{ color: T.text, fontWeight: 700, fontSize: "1.05rem" }}>{avgRating.toFixed(1)} / 5.0</div>
+                  <div style={{ color: T.stoneL, fontSize: "0.75rem" }}>{evReviews.length} review{evReviews.length !== 1 ? "s" : ""}</div>
+                </div>
+              </div>
+            )}
+          </Section>
+
+          {/* ── VIBE TAGS & CUSTOM QUESTIONS ── */}
+          {((ev.vibeTags || []).length > 0 || (ev.customQuestions || []).length > 0) && (
+            <Section title="Tags & Custom Questions" icon="🏷️">
+              {(ev.vibeTags || []).length > 0 && (
+                <div style={{ marginBottom: "14px" }}>
+                  <div style={{ color: T.stoneL, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "7px" }}>Vibe Tags</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                    {(ev.vibeTags || []).map(vid => {
+                      const vt = VIBE_TAGS.find(v => v.id === vid);
+                      return vt ? <Badge key={vid} label={`${vt.emoji} ${vt.label}`} /> : null;
+                    })}
+                  </div>
+                </div>
+              )}
+              {(ev.customQuestions || []).length > 0 && (
+                <div>
+                  <div style={{ color: T.stoneL, fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "7px" }}>Custom Questions ({ev.customQuestions.length})</div>
+                  {ev.customQuestions.map((q, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "9px 12px", background: T.cream, borderRadius: "8px", marginBottom: "6px" }}>
+                      <span style={{ color: T.stoneL, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase" }}>{q.type}</span>
+                      <span style={{ color: T.textMid, fontSize: "0.85rem", flex: 1 }}>{q.label}</span>
+                      {q.required && <Badge label="Required" color={T.warn} bg="#FEE2E2" />}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+          )}
+
+        </div>
+
+        {/* ── DANGER ZONE ── */}
+        <div style={{ background: "#FEF2F2", border: `1px solid #FECACA`, borderRadius: "16px", padding: "20px 22px", marginTop: "4px" }}>
+          <h3 style={{ color: T.warn, fontFamily: "'Lora',serif", fontSize: "1rem", margin: "0 0 12px", display: "flex", alignItems: "center", gap: "8px" }}>⚠️ Danger Zone</h3>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <button onClick={() => { if (window.confirm(`Duplicate "${ev.title}"? Dates will be cleared so you can set new ones.`)) duplicateEvent(ev); }} style={{ background: "#fff", color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.82rem" }}>⧉ Duplicate Event</button>
+            <button onClick={() => { if (window.confirm("Permanently delete this event? This cannot be undone.")) { handleDelete(ev.id); setView("dashboard"); }}} style={{ background: T.warn, color: "#fff", border: "none", borderRadius: "8px", padding: "8px 16px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem" }}>🗑️ Delete Event</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView() {
   const { events, setView, setDashUnlocked, setForm, setEditingId, setFormErrors, setSelectedId, startEdit, handleDelete, duplicateEvent, updateVendorStatus, showToast, resendApiKey, setResendApiKey, scheduleEventReminders, copyInviteLink, getInviteLink, loadEvents, vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig } = useApp();
@@ -5857,7 +6151,8 @@ function DashboardView() {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-                  <button onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>View</button>
+                  <button onClick={() => { setSelectedId(ev.id); setView("admindetail"); }} style={{ background: `${T.bgDeep}`, color: T.green4, border: `1px solid ${T.green3}40`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>⚙️ Admin View</button>
+                  <button onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ background: T.green5, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>👁 Public View</button>
                   <button onClick={() => startEdit(ev)} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>✏️ Edit</button>
                   <button onClick={() => { if (window.confirm(`Duplicate "${ev.title}"? Dates will be cleared so you can set new ones.`)) duplicateEvent(ev); }} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>⧉ Dupe</button>
                   <button onClick={() => { if (window.confirm(`Send email reminders to all attendees of "${ev.title}"?`)) scheduleEventReminders(ev.id); }} style={{ background: `${T.green1}12`, color: T.green1, border: `1px solid ${T.green3}`, borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.8rem" }}>📧 Remind</button>
@@ -6108,7 +6403,8 @@ function DashboardView() {
                         </div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: "7px", flexShrink: 0 }}>
-                        <button onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>👁 View</button>
+                        <button onClick={() => { setSelectedId(ev.id); setView("admindetail"); }} style={{ background: T.bgDeep, color: T.green4, border: `1px solid ${T.green3}40`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>⚙️ Admin View</button>
+                        <button onClick={() => { setSelectedId(ev.id); setView("detail"); }} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>👁 Public View</button>
                         <button onClick={() => startEdit(ev)} style={{ background: T.cream, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>✏️ Edit</button>
                         <button onClick={() => { if (window.confirm("Permanently delete this event?")) handleDelete(ev.id); }} style={{ background: "#FEF2F2", color: T.warn, border: `1px solid #FECACA`, borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>🗑️ Delete</button>
                       </div>
@@ -6888,7 +7184,7 @@ function AppShell() {
     if (outcome === "accepted") { setInstallPrompt(null); setShowInstallBanner(false); }
   };
 
-  const mobileHidden = ["checkout", "dashlogin", "dashboard", "create", "dayofmode"].includes(view);
+  const mobileHidden = ["checkout", "dashlogin", "dashboard", "create", "dayofmode", "admindetail"].includes(view);
 
   return (
     <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", background: T.bg, minHeight: "100vh", paddingBottom: mobileHidden ? "0" : "0" }}>
@@ -6927,6 +7223,7 @@ function AppShell() {
               {view === "mytickets" && "Your account & registered events"}
               {view === "checkout" && "Completing your order"}
               {view === "dashboard" && "You're in admin mode"}
+              {view === "admindetail" && "Admin event details"}
             </span>
           </span>
         </div>
@@ -6941,6 +7238,7 @@ function AppShell() {
         {view === "checkout" && <CheckoutView />}
         {view === "dashlogin" && <DashLoginView />}
         {view === "dashboard" && <DashboardView />}
+        {view === "admindetail" && <AdminDetailView />}
         {view === "dayofmode" && <DayOfModeView />}
         {view === "saved" && <SavedView />}
         <Footer />
