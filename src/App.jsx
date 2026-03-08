@@ -3,7 +3,7 @@
 // For review purposes. Production uses the modular src/ layout.
 // ============================================================
 
-import React, { createContext, useContext, useState, useRef, useEffect } from "react";
+import React, { createContext, useContext, useState, useRef, useEffect, useMemo } from "react";
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 // Load jsQR for QR scanning
@@ -495,6 +495,15 @@ const initials = (u) => {
 };
 
 // ─── COUNTDOWN TIMER ──────────────────────────────────────────────────────────
+// Extracted outside CountdownTimer so it is not recreated on every tick
+function CountdownBox({ val, label }) {
+  return (
+    <div style={{ textAlign: "center", minWidth: "52px" }}>
+      <div style={{ background: T.bgDeep, color: T.green3, borderRadius: "10px", padding: "10px 8px", fontFamily: "'Lora',serif", fontSize: "1.6rem", fontWeight: 700, lineHeight: 1, minWidth: "52px" }}>{String(val).padStart(2, "0")}</div>
+      <div style={{ color: T.stoneL, fontSize: "0.65rem", marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
+    </div>
+  );
+}
 function CountdownTimer({ ev }) {
   const calcTime = () => {
     const target = new Date(`${ev.startDate}T${ev.time || "00:00"}:00`);
@@ -512,23 +521,17 @@ function CountdownTimer({ ev }) {
     return () => clearInterval(interval);
   }, [ev.startDate, ev.time]);
   if (!time) return null;
-  const Box = ({ val, label }) => (
-    <div style={{ textAlign: "center", minWidth: "52px" }}>
-      <div style={{ background: T.bgDeep, color: T.green3, borderRadius: "10px", padding: "10px 8px", fontFamily: "'Lora',serif", fontSize: "1.6rem", fontWeight: 700, lineHeight: 1, minWidth: "52px" }}>{String(val).padStart(2, "0")}</div>
-      <div style={{ color: T.stoneL, fontSize: "0.65rem", marginTop: "4px", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
-    </div>
-  );
   return (
     <div style={{ background: `linear-gradient(135deg,${T.bgDeep},${T.bgMid})`, borderRadius: "14px", padding: "16px 20px", marginBottom: "18px", border: `1px solid ${T.green1}30` }}>
       <div style={{ color: T.green4, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "12px" }}>⏳ Event Starts In</div>
       <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "center" }}>
-        {time.d > 0 && <Box val={time.d} label="Days" />}
+        {time.d > 0 && <CountdownBox val={time.d} label="Days" />}
         {time.d > 0 && <div style={{ color: T.green3, fontSize: "1.4rem", fontWeight: 300, marginBottom: "18px" }}>:</div>}
-        <Box val={time.h} label="Hours" />
+        <CountdownBox val={time.h} label="Hours" />
         <div style={{ color: T.green3, fontSize: "1.4rem", fontWeight: 300, marginBottom: "18px" }}>:</div>
-        <Box val={time.m} label="Min" />
+        <CountdownBox val={time.m} label="Min" />
         <div style={{ color: T.green3, fontSize: "1.4rem", fontWeight: 300, marginBottom: "18px" }}>:</div>
-        <Box val={time.s} label="Sec" />
+        <CountdownBox val={time.s} label="Sec" />
       </div>
     </div>
   );
@@ -598,6 +601,23 @@ function PasswordInput({ value, onChange, onKeyDown, placeholder, style, error }
 // ─── CONTEXT ──────────────────────────────────────────────────────────────────
 const AppContext = createContext(null);
 
+// Normalizes a raw profile/metadata object into a single consistent shape so
+// that every consumer can use `user.firstName` / `user.lastName` / `user.avatarColor`
+// without dual-key fallbacks scattered across the codebase.
+const normalizeUser = (raw) => {
+  if (!raw) return null;
+  return {
+    ...raw,
+    // Canonical camelCase aliases — components should use these
+    firstName:   raw.firstName   || raw.first_name   || "",
+    lastName:    raw.lastName    || raw.last_name     || "",
+    avatarColor: raw.avatarColor || raw.avatar_color  || "#40916C",
+    isAdmin:     raw.isAdmin     || raw.is_admin      || false,
+    emailOptIn:  raw.emailOptIn  || raw.email_opt_in  || false,
+    // Keep snake_case originals intact for Supabase writes
+  };
+};
+
 function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -612,23 +632,8 @@ function AppProvider({ children }) {
   const [resendApiKey, setResendApiKey] = useState(localStorage.getItem("nh_resend_key") || "");
 
   // ── Site-wide configurable vibe tags ──────────────────────────────────────
-  const _defaultVibeConfig = {
-    enabled: true,
-    items: [
-      { id: "dog-friendly",    emoji: "🐾", label: "Dog-Friendly" },
-      { id: "kid-friendly",    emoji: "👶", label: "Kid-Friendly" },
-      { id: "bring-a-blanket", emoji: "🧺", label: "Bring a Blanket" },
-      { id: "limited-spots",   emoji: "⚡", label: "Limited Spots" },
-      { id: "rain-or-shine",   emoji: "🌦️", label: "Rain or Shine" },
-      { id: "all-ages",        emoji: "👨‍👩‍👧", label: "All Ages" },
-      { id: "21-plus",         emoji: "🍺", label: "21+" },
-      { id: "outdoors",        emoji: "🌿", label: "Outdoors" },
-      { id: "indoor",          emoji: "🏠", label: "Indoor" },
-      { id: "free-parking",    emoji: "🅿️", label: "Free Parking" },
-      { id: "wheelchair",      emoji: "♿", label: "Accessible" },
-      { id: "bring-your-own",  emoji: "🎒", label: "Bring Your Own" },
-    ],
-  };
+  // Uses VIBE_TAGS module constant as the single source of truth
+  const _defaultVibeConfig = { enabled: true, items: VIBE_TAGS };
   const [vibeConfig, setVibeConfig] = useState(() => {
     try { const s = localStorage.getItem("nh_vibe_config"); return s ? JSON.parse(s) : _defaultVibeConfig; } catch { return _defaultVibeConfig; }
   });
@@ -650,13 +655,8 @@ function AppProvider({ children }) {
   const saveSortConfig = (cfg) => { setSortConfig(cfg); localStorage.setItem("nh_sort_config", JSON.stringify(cfg)); };
 
   // ── Site-wide configurable event categories ───────────────────────────
-  const _defaultCategoryConfig = {
-    enabled: true,
-    items: [
-      "Community", "Workshop", "Festival", "Music", "Food & Drink",
-      "Arts & Crafts", "Wellness", "Sports & Nature", "Charity", "Other",
-    ],
-  };
+  // Uses CATEGORIES module constant as the single source of truth
+  const _defaultCategoryConfig = { enabled: true, items: CATEGORIES };
   const [categoryConfig, setCategoryConfig] = useState(() => {
     try { const s = localStorage.getItem("nh_category_config"); return s ? JSON.parse(s) : _defaultCategoryConfig; } catch { return _defaultCategoryConfig; }
   });
@@ -788,26 +788,26 @@ You are visiting a working farm as a participant who is either observing or cont
           try {
             const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
             if (profile) {
-              setCurrentUser({ ...profile, email: user.email });
+              setCurrentUser(normalizeUser({ ...profile, email: user.email }));
             } else {
               // Fallback: build profile from auth metadata
               const meta = user.user_metadata || {};
-              setCurrentUser({
+              setCurrentUser(normalizeUser({
                 id: user.id, email: user.email,
                 first_name: meta.first_name || "", last_name: meta.last_name || "",
                 phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
                 avatar_color: "#40916C", is_admin: false,
-              });
+              }));
             }
           } catch (profileErr) {
             console.warn("Profile fetch failed, using metadata fallback:", profileErr);
             const meta = user.user_metadata || {};
-            setCurrentUser({
+            setCurrentUser(normalizeUser({
               id: user.id, email: user.email,
               first_name: meta.first_name || "", last_name: meta.last_name || "",
               phone: meta.phone || "", city: meta.city || "", state: meta.state || "",
               avatar_color: "#40916C", is_admin: false,
-            });
+            }));
           }
         }
         // Load events with tiers and vendors
@@ -1081,7 +1081,7 @@ You are visiting a working farm as a participant who is either observing or cont
     try {
       const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (profile) {
-        setCurrentUser({ ...profile, email: user.email });
+        setCurrentUser(normalizeUser({ ...profile, email: user.email }));
         await loadMyTickets(user.id);
         setAuthModal(null);
         showToast(`🌿 Welcome back, ${profile.first_name || ""}!`);
@@ -1090,7 +1090,7 @@ You are visiting a working farm as a participant who is either observing or cont
     } catch (e) { console.warn("Profile fetch on login failed:", e); }
     // Fallback to metadata
     const meta = user.user_metadata || {};
-    setCurrentUser({ id: user.id, email: user.email, first_name: meta.first_name || "", last_name: meta.last_name || "", phone: meta.phone || "", city: meta.city || "", state: meta.state || "", avatar_color: "#40916C", is_admin: false });
+    setCurrentUser(normalizeUser({ id: user.id, email: user.email, first_name: meta.first_name || "", last_name: meta.last_name || "", phone: meta.phone || "", city: meta.city || "", state: meta.state || "", avatar_color: "#40916C", is_admin: false }));
     await loadMyTickets(user.id);
     setAuthModal(null);
     showToast(`🌿 Welcome back!`);
@@ -1132,7 +1132,7 @@ You are visiting a working farm as a participant who is either observing or cont
     if (hasSession) {
       const { error: profileError } = await supabase.from("profiles").insert(profile);
       if (profileError) console.warn("Profile insert failed (non-fatal):", profileError.message);
-      setCurrentUser(profile);
+      setCurrentUser(normalizeUser(profile));
       setAuthModal(null);
       showToast(`🌿 Welcome to New Harmony, ${authForm.firstName}!`);
     } else {
@@ -1158,7 +1158,7 @@ You are visiting a working farm as a participant who is either observing or cont
       email_opt_in: updates.emailOptIn,
     }).eq("id", currentUser.id);
     if (error) { showToast("Could not save profile: " + error.message, "warn"); return; }
-    setCurrentUser(prev => ({ ...prev, first_name: updates.firstName, last_name: updates.lastName, phone: updates.phone, city: updates.city, state: updates.state, email_opt_in: updates.emailOptIn }));
+    setCurrentUser(prev => normalizeUser({ ...prev, first_name: updates.firstName, last_name: updates.lastName, phone: updates.phone, city: updates.city, state: updates.state, email_opt_in: updates.emailOptIn }));
     showToast("Profile updated ✓");
   };
 
@@ -2240,15 +2240,16 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
   };
 
   // ─── FILTERED EVENTS ───────────────────────────────────────────────────────
-  const visibleEvents = activeEvents.filter(ev => {
+  const visibleEvents = useMemo(() => activeEvents.filter(ev => {
     // Private events are hidden from the public discover feed —
     // but admins with the dashboard unlocked can see everything
     if (ev.isPrivate === true && !dashUnlocked) return false;
     // Non-logged-in users only see public events
     if (!currentUser && ev.isPublic === false) return false;
     return true;
-  });
-  const filteredEvents = visibleEvents.filter(ev => {
+  }), [activeEvents, dashUnlocked, currentUser]);
+
+  const filteredEvents = useMemo(() => visibleEvents.filter(ev => {
     const q = search.toLowerCase();
     const ms = !search || [ev.title, ev.description, ev.location].some(s => s && s.toLowerCase().includes(q));
     const mc = filterCat === "All" || ev.category === filterCat;
@@ -2260,7 +2261,8 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     const mp = filterPrice === "all" ? true : filterPrice === "free" ? lowestPrice === 0 : lowestPrice > 0;
     const mv = filterVibe.length === 0 ? true : filterVibe.every(v => (ev.vibeTags || []).includes(v));
     return ms && mc && md && mp && mv;
-  }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "")),
+  [visibleEvents, search, filterCat, filterDate, filterPrice, filterVibe]);
 
   // ─── LOADING SCREEN ────────────────────────────────────────────────────────
   if (loading) return (
@@ -2271,7 +2273,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     </div>
   );
 
-  const value = {
+  const value = useMemo(() => ({
     currentUser, setCurrentUser,
     authModal, setAuthModal, authForm, setAuthForm, authErrors, setAuthErrors, authMode, setAuthMode,
     cart, setCart, cartOpen, setCartOpen, cartTotal, cartCount,
@@ -2316,7 +2318,23 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     categoryConfig, saveCategoryConfig,
     eventTypeConfig, saveEventTypeConfig,
     termsContent, saveTermsContent,
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [
+    currentUser, authModal, authForm, authErrors, authMode,
+    cart, cartOpen, cartTotal, cartCount,
+    checkoutInfo, checkoutErrors, checkoutStep, paymentForm, paymentErrors,
+    orderComplete, payMethod, paypalLoaded, processing,
+    events, view, selectedId, search, filterCat, filterDate, filterPrice, filterVibe,
+    myTickets, toast, registerQty, selectedTierId,
+    calendarModal, vendorModal, vendorForm, vendorErrors, vendorSubmitted,
+    dashUnlocked, pwInput, pwError, resendApiKey,
+    form, formErrors, editingId, checkinModal,
+    selectedEvent, activeEvents, archivedEvents, filteredEvents,
+    reviews, qaItems, interests, following, swRegistered,
+    installPrompt, isInstalled, isOnline,
+    eventPhotos, badges, activityFeed, notifPrefs, referralStats,
+    customAnswers, vibeConfig, sortConfig, categoryConfig, eventTypeConfig, termsContent,
+  ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
@@ -7985,7 +8003,7 @@ function AppShell() {
   const mobileHidden = ["checkout", "dashlogin", "dashboard", "create", "dayofmode", "admindetail"].includes(view);
 
   return (
-    <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", background: T.bg, minHeight: "100vh", paddingBottom: mobileHidden ? "0" : "0" }}>
+    <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", background: T.bg, minHeight: "100vh", paddingBottom: mobileHidden ? "0" : "env(safe-area-inset-bottom, 0px)" }}>
       {/* Offline indicator */}
       {!isOnline && (
         <div style={{ background: "#DC2626", color: "#fff", textAlign: "center", padding: "8px", fontSize: "0.82rem", fontWeight: 600, position: "sticky", top: 0, zIndex: 300 }}>
