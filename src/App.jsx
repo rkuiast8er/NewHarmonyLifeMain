@@ -682,6 +682,48 @@ function AppProvider({ children }) {
     try { const s = localStorage.getItem("nh_event_type_config"); return s ? JSON.parse(s) : _defaultEventTypeConfig; } catch { return _defaultEventTypeConfig; }
   });
   const saveEventTypeConfig = (cfg) => { setEventTypeConfig(cfg); localStorage.setItem("nh_event_type_config", JSON.stringify(cfg)); };
+  const _defaultTerms = `1. Acceptance of Terms
+By creating an account or using New Harmony Life Events (the "Service"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the Service.
+
+2. Who We Are
+New Harmony Life is a community events platform serving the Loess Hills region of Iowa. We connect local organizers with attendees for festivals, workshops, markets, wellness events, and more. Questions? Email us at hello@newharmonylife.com.
+
+3. Your Account
+You are responsible for keeping your login credentials secure and for all activity under your account. You must be 13 years of age or older to create an account. Please provide accurate information when registering — we use it to send you ticket confirmations and event updates.
+
+4. Tickets & Purchases
+All ticket sales are final unless the event's published refund policy states otherwise. Refund eligibility is set by the individual event organizer and displayed on each event page. New Harmony Life is not responsible for event cancellations by third-party organizers, but we will communicate changes to registered attendees as promptly as possible.
+
+5. Vendor Applications
+Vendor applications submitted through the platform are reviewed by event organizers. Submitting an application does not guarantee acceptance. Vendors are responsible for obtaining any required licenses, permits, food-handling certifications, and for collecting applicable sales tax.
+
+6. Acceptable Use
+You agree not to misuse the Service — including attempting to circumvent capacity limits, submitting false registrations, harassing other community members, or using the platform for unlawful purposes. We reserve the right to suspend accounts that violate these terms.
+
+7. Privacy & Your Data
+We collect your name, email, phone number, and city/state when you register. This information is used solely to manage your account, process ticket purchases, and (with your consent) send you updates about upcoming New Harmony Life events. We do not sell your personal data to third parties. You may withdraw marketing consent at any time in your account settings.
+
+8. Email Communications
+By opting in to our mailing list, you consent to receive occasional emails about upcoming events, community news, and seasonal updates from New Harmony Life. You can unsubscribe at any time by updating your notification preferences in My Account, or by clicking the unsubscribe link in any email we send.
+
+9. Photos & Content
+By uploading photos to an event gallery, you grant New Harmony Life a non-exclusive license to display and share that content in connection with the event and our community platforms. You retain ownership of your photos. By registering as a vendor, you grant permission for your business name, logo, and photos to be used in event promotions.
+
+10. Limitation of Liability
+New Harmony Life and the Loess Hills Elysian Prairie Restoration and Conservation Project are not liable for personal injury, loss, or damage sustained at events listed on this platform. Attendees and vendors participate at their own risk. Our total liability for any claim arising from use of the Service is limited to the amount you paid for the relevant ticket or registration.
+
+11. Changes to These Terms
+We may update these Terms from time to time. When we do, we'll update the date at the top of this page. Continued use of the Service after changes are posted constitutes your acceptance of the revised Terms.
+
+12. Contact Us
+If you have questions about these Terms or our privacy practices, please reach out at hello@newharmonylife.com or write to us at New Harmony Life, Castana, IA.
+
+13. Iowa Agricultural Tourism Promotion Act — Iowa Code Chapter 673A
+You are visiting a working farm as a participant who is either observing or contributing to the success of farming activities. Under Iowa law you are assuming liability for any hazard that you may encounter. A hazard includes the inherent risk of participating in a farming activity or disregarding written or verbal instructions. Farming includes dangerous conditions present on land and in structures, unpredictable behavior of farm animals, dangers associated with the operation of equipment and machinery, and potential wrongful acts of another visitor. Be careful.`;
+  const [termsContent, setTermsContent] = useState(() => {
+    try { const s = localStorage.getItem("nh_terms_content"); return s || _defaultTerms; } catch { return _defaultTerms; }
+  });
+  const saveTermsContent = (text) => { setTermsContent(text); try { localStorage.setItem("nh_terms_content", text); } catch {} };
   const [checkoutErrors, setCheckoutErrors] = useState({});
   const [checkoutStep, setCheckoutStep] = useState(1);
   const [paymentForm, setPaymentForm] = useState({ cardName: "", cardNum: "", expiry: "", cvv: "" });
@@ -2273,6 +2315,7 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
     sortConfig, saveSortConfig,
     categoryConfig, saveCategoryConfig,
     eventTypeConfig, saveEventTypeConfig,
+    termsContent, saveTermsContent,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -2638,6 +2681,24 @@ function CartSidebar() {
 
 // ─── TERMS & PRIVACY MODAL ────────────────────────────────────────────────────
 function TermsModal({ onClose }) {
+  const { termsContent } = useApp();
+  // Parse plain text into sections: lines starting with a number+period become headings
+  const sections = [];
+  let current = null;
+  (termsContent || "").split("\n").forEach(line => {
+    const headingMatch = line.match(/^(\d+\.\s+.+)/);
+    if (headingMatch) {
+      if (current) sections.push(current);
+      current = { heading: line.trim(), body: [] };
+    } else if (current && line.trim()) {
+      current.body.push(line.trim());
+    } else if (!current && line.trim()) {
+      // Text before any numbered heading — treat as a preamble section
+      sections.push({ heading: null, body: [line.trim()] });
+    }
+  });
+  if (current) sections.push(current);
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
       <div style={{ background: T.bgCard, borderRadius: "20px", width: "100%", maxWidth: "600px", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 70px rgba(0,0,0,0.35)", position: "relative" }}>
@@ -2651,59 +2712,10 @@ function TermsModal({ onClose }) {
         </div>
         {/* Scrollable body */}
         <div style={{ overflowY: "auto", padding: "24px 28px", flex: 1 }}>
-          {[
-            {
-              heading: "1. Acceptance of Terms",
-              body: 'By creating an account or using New Harmony Life Events (the "Service"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the Service.',
-            },
-            {
-              heading: "2. Who We Are",
-              body: "New Harmony Life is a community events platform serving the Loess Hills region of Iowa. We connect local organizers with attendees for festivals, workshops, markets, wellness events, and more. Questions? Email us at hello@newharmonylife.com.",
-            },
-            {
-              heading: "3. Your Account",
-              body: "You are responsible for keeping your login credentials secure and for all activity under your account. You must be 13 years of age or older to create an account. Please provide accurate information when registering &mdash; we use it to send you ticket confirmations and event updates.",
-            },
-            {
-              heading: "4. Tickets & Purchases",
-              body: "All ticket sales are final unless the event's published refund policy states otherwise. Refund eligibility is set by the individual event organizer and displayed on each event page. New Harmony Life is not responsible for event cancellations by third-party organizers, but we will communicate changes to registered attendees as promptly as possible.",
-            },
-            {
-              heading: "5. Vendor Applications",
-              body: "Vendor applications submitted through the platform are reviewed by event organizers. Submitting an application does not guarantee acceptance. Vendors are responsible for obtaining any required licenses, permits, food-handling certifications, and for collecting applicable sales tax.",
-            },
-            {
-              heading: "6. Acceptable Use",
-              body: "You agree not to misuse the Service &mdash; including attempting to circumvent capacity limits, submitting false registrations, harassing other community members, or using the platform for unlawful purposes. We reserve the right to suspend accounts that violate these terms.",
-            },
-            {
-              heading: "7. Privacy & Your Data",
-              body: "We collect your name, email, phone number, and city/state when you register. This information is used solely to manage your account, process ticket purchases, and (with your consent) send you updates about upcoming New Harmony Life events. We do not sell your personal data to third parties. You may withdraw marketing consent at any time in your account settings.",
-            },
-            {
-              heading: "8. Email Communications",
-              body: "By opting in to our mailing list, you consent to receive occasional emails about upcoming events, community news, and seasonal updates from New Harmony Life. You can unsubscribe at any time by updating your notification preferences in My Account, or by clicking the unsubscribe link in any email we send.",
-            },
-            {
-              heading: "9. Photos & Content",
-              body: "By uploading photos to an event gallery, you grant New Harmony Life a non-exclusive license to display and share that content in connection with the event and our community platforms. You retain ownership of your photos. By registering as a vendor, you grant permission for your business name, logo, and photos to be used in event promotions.",
-            },
-            {
-              heading: "10. Limitation of Liability",
-              body: "New Harmony Life and the Loess Hills Elysian Prairie Restoration and Conservation Project are not liable for personal injury, loss, or damage sustained at events listed on this platform. Attendees and vendors participate at their own risk. Our total liability for any claim arising from use of the Service is limited to the amount you paid for the relevant ticket or registration.",
-            },
-            {
-              heading: "11. Changes to These Terms",
-              body: "We may update these Terms from time to time. When we do, we'll update the date at the top of this page. Continued use of the Service after changes are posted constitutes your acceptance of the revised Terms.",
-            },
-            {
-              heading: "12. Contact Us",
-              body: "If you have questions about these Terms or our privacy practices, please reach out at hello@newharmonylife.com or write to us at New Harmony Life, Castana, IA.",
-            },
-          ].map(({ heading, body }) => (
-            <div key={heading} style={{ marginBottom: "20px" }}>
-              <div style={{ color: T.green1, fontWeight: 700, fontSize: "0.88rem", marginBottom: "5px" }}>{heading}</div>
-              <p style={{ color: T.textSoft, fontSize: "0.85rem", lineHeight: 1.75, margin: 0 }}>{body}</p>
+          {sections.map((sec, i) => (
+            <div key={i} style={{ marginBottom: "20px" }}>
+              {sec.heading && <div style={{ color: T.green1, fontWeight: 700, fontSize: "0.88rem", marginBottom: "5px" }}>{sec.heading}</div>}
+              <p style={{ color: T.textSoft, fontSize: "0.85rem", lineHeight: 1.75, margin: 0 }}>{sec.body.join(" ")}</p>
             </div>
           ))}
         </div>
@@ -5500,7 +5512,7 @@ function DashLoginView() {
 
 // ─── DASHBOARD SETTINGS PANEL ────────────────────────────────────────────────
 function DashSettingsPanel() {
-  const { vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig, showToast, resendApiKey, setResendApiKey } = useApp();
+  const { vibeConfig, saveVibeConfig, sortConfig, saveSortConfig, categoryConfig, saveCategoryConfig, eventTypeConfig, saveEventTypeConfig, showToast, resendApiKey, setResendApiKey, termsContent, saveTermsContent } = useApp();
 
   // ── Vibe editor state ───────────────────────────────────────────────────
   const [vibeEnabled, setVibeEnabled] = useState(vibeConfig.enabled);
@@ -5860,6 +5872,65 @@ function DashSettingsPanel() {
           <strong>Setup steps:</strong><br/>1. Create account at resend.com<br/>2. Add &amp; verify your domain<br/>3. Create an API key and paste it above<br/>4. Update the "from" address in the code
         </div>
       </div>
+
+      {/* ── Terms of Service Editor ──────────────────────────────────────── */}
+      {(() => {
+        const [localTerms, setLocalTerms] = React.useState(termsContent);
+        const [termsPreview, setTermsPreview] = React.useState(false);
+        const isDirty = localTerms !== termsContent;
+        return (
+          <div style={panelStyle}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px", flexWrap: "wrap", gap: "10px" }}>
+              <h3 style={{ color: T.text, margin: 0, fontFamily: "'Lora',serif", fontSize: "1.1rem" }}>📄 Terms of Service & Privacy Policy</h3>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={() => setTermsPreview(p => !p)}
+                  style={{ background: termsPreview ? T.green5 : T.cream, color: termsPreview ? T.green1 : T.textSoft, border: `1px solid ${termsPreview ? T.green3 : T.border}`, borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
+                  {termsPreview ? "✏️ Edit" : "👁 Preview"}
+                </button>
+                {isDirty && (
+                  <button onClick={() => { saveTermsContent(localTerms); showToast("Terms saved ✓"); }}
+                    style={{ background: `linear-gradient(135deg,${T.green1},${T.green2})`, color: "#fff", border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: "0.78rem" }}>
+                    Save Changes
+                  </button>
+                )}
+                {isDirty && (
+                  <button onClick={() => setLocalTerms(termsContent)}
+                    style={{ background: "#FEE2E2", color: T.warn, border: "none", borderRadius: "8px", padding: "6px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: "0.78rem" }}>
+                    Discard
+                  </button>
+                )}
+              </div>
+            </div>
+            <p style={{ color: T.textSoft, fontSize: "0.82rem", margin: "0 0 14px", lineHeight: 1.6 }}>
+              This is displayed when users click "Terms of Service" during sign-up. Format sections with a number and period at the start of a line (e.g. <code style={{ background: T.cream, padding: "1px 5px", borderRadius: "4px" }}>1. Section Title</code>) — the rest of the text in that block becomes the body.
+            </p>
+            {termsPreview ? (
+              <div style={{ background: T.cream, border: `1px solid ${T.border}`, borderRadius: "10px", padding: "18px 20px", maxHeight: "420px", overflowY: "auto" }}>
+                {localTerms.split("\n").map((line, i) => {
+                  const isHeading = /^\d+\.\s+/.test(line);
+                  return line.trim() ? (
+                    <p key={i} style={{ margin: "0 0 8px", color: isHeading ? T.green1 : T.textSoft, fontWeight: isHeading ? 700 : 400, fontSize: isHeading ? "0.88rem" : "0.83rem", lineHeight: 1.7 }}>{line}</p>
+                  ) : <div key={i} style={{ height: "6px" }} />;
+                })}
+              </div>
+            ) : (
+              <textarea
+                value={localTerms}
+                onChange={e => setLocalTerms(e.target.value)}
+                rows={22}
+                style={{ width: "100%", padding: "14px", borderRadius: "10px", border: `1px solid ${isDirty ? T.green3 : T.border}`, fontFamily: "inherit", fontSize: "0.83rem", lineHeight: 1.7, color: T.textMid, background: "#fff", resize: "vertical", outline: "none", boxSizing: "border-box" }}
+                placeholder="Enter your terms of service here..."
+                spellCheck={true}
+              />
+            )}
+            {isDirty && (
+              <div style={{ marginTop: "10px", background: "#FFF8E7", border: "1px solid #F6D860", borderRadius: "8px", padding: "8px 12px", fontSize: "0.78rem", color: "#92710A", fontWeight: 600 }}>
+                ⚠ Unsaved changes — click Save Changes to publish.
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Admin Password ────────────────────────────────────────────────── */}
       <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "16px", padding: "24px" }}>
