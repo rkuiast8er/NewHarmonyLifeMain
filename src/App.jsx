@@ -1653,45 +1653,105 @@ self.addEventListener("notificationclick", e => { e.notification.close(); if (e.
         setMyTickets(prev => [...prev, ...newTickets]);
       }
 
-      // Send confirmation email via Resend if API key is configured
+      // Send confirmation email with tickets via Resend if API key is configured
       const rKey = localStorage.getItem("nh_resend_key");
       if (rKey && checkoutInfo.email) {
         try {
-          const itemsList = cart.map(item =>
-            `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">${item.event.title} &mdash; ${item.tier.name} x${item.qty}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right">${item.tier.price === 0 ? "Free" : "$" + (item.tier.price * item.qty).toFixed(2)}</td></tr>`
+          // Build one ticket block per cart item (expanding qty into individual ticket rows)
+          const ticketBlocks = newTickets.map(t => {
+            const ev = cart.find(i => i.event.id === t.eventId)?.event || {};
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(t.ticketId)}&color=1C2B1A&bgcolor=F7F5F0`;
+            const eventDate = ev.date ? new Date(ev.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "";
+            const eventTime = ev.startTime ? (() => { const [h,m] = ev.startTime.split(":"); const hr = parseInt(h); return `${hr > 12 ? hr-12 : hr || 12}:${m} ${hr >= 12 ? "PM" : "AM"}`; })() : "";
+            return `
+  <div style="border:2px solid #3D5A38;border-radius:14px;padding:0;margin-bottom:24px;overflow:hidden;background:#fff">
+    <!-- Ticket header -->
+    <div style="background:#1C2B1A;padding:16px 22px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="color:#74C69D;font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px">🌿 New Harmony Life · Ticket</div>
+        <div style="color:#fff;font-size:1.05rem;font-weight:700">${t.eventTitle}</div>
+      </div>
+      <div style="background:#74C69D22;border:1px solid #74C69D55;border-radius:8px;padding:4px 12px;color:#74C69D;font-size:0.75rem;font-weight:700;white-space:nowrap">${t.tierName}</div>
+    </div>
+    <!-- Ticket body -->
+    <div style="display:flex;padding:20px 22px;gap:20px;align-items:flex-start">
+      <!-- QR code -->
+      <div style="flex-shrink:0;text-align:center">
+        <img src="${qrUrl}" width="130" height="130" alt="QR Code" style="display:block;border-radius:8px;border:1px solid #e5e7eb" />
+        <div style="color:#9CA3AF;font-size:0.62rem;margin-top:5px;font-family:monospace">Scan at entry</div>
+      </div>
+      <!-- Details -->
+      <div style="flex:1;min-width:0">
+        ${eventDate ? `<div style="margin-bottom:10px"><div style="color:#9CA3AF;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Date &amp; Time</div><div style="color:#1C2B1A;font-weight:600;font-size:0.88rem">${eventDate}${eventTime ? " · " + eventTime : ""}</div></div>` : ""}
+        ${ev.location ? `<div style="margin-bottom:10px"><div style="color:#9CA3AF;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Location</div><div style="color:#1C2B1A;font-weight:600;font-size:0.88rem">${ev.location}</div></div>` : ""}
+        <div style="margin-bottom:10px"><div style="color:#9CA3AF;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Ticket Holder</div><div style="color:#1C2B1A;font-weight:600;font-size:0.88rem">${buyerName}</div></div>
+        <div style="margin-bottom:10px"><div style="color:#9CA3AF;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Qty</div><div style="color:#1C2B1A;font-weight:600;font-size:0.88rem">${t.qty} ticket${t.qty !== 1 ? "s" : ""}</div></div>
+      </div>
+    </div>
+    <!-- Ticket footer -->
+    <div style="background:#F7F5F0;border-top:1px dashed #D1D5DB;padding:10px 22px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:monospace;color:#3D5A38;font-size:0.8rem;font-weight:700;letter-spacing:0.04em">${t.ticketId}</div>
+      <div style="color:#6B7280;font-size:0.75rem">Order ${orderNum}</div>
+    </div>
+  </div>`;
+          }).join("");
+
+          // Receipt summary rows
+          const receiptRows = cart.map(item =>
+            `<tr><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem">${item.event.title} &mdash; ${item.tier.name}</td><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem;text-align:center">${item.qty}</td><td style="padding:9px 14px;border-bottom:1px solid #F3F4F6;color:#374151;font-size:0.85rem;text-align:right">${item.tier.price === 0 ? "Free" : "$" + (item.tier.price * item.qty).toFixed(2)}</td></tr>`
           ).join("");
-          const emailHtml = `
-<div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
-  <div style="background:#1C2B1A;padding:28px 32px;text-align:center">
-    <h1 style="color:#74C69D;margin:0;font-size:1.4rem">🌿 New Harmony Life</h1>
-    <p style="color:#9CA3AF;margin:8px 0 0;font-size:0.9rem">Ticket Confirmation</p>
+
+          const emailHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#F3F4F6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="max-width:580px;margin:32px auto;padding:0 16px">
+
+  <!-- Header -->
+  <div style="background:#1C2B1A;border-radius:14px 14px 0 0;padding:28px 32px;text-align:center">
+    <div style="color:#74C69D;font-size:1.5rem;font-weight:700;margin-bottom:4px">🌿 New Harmony Life</div>
+    <div style="color:#9CA3AF;font-size:0.9rem">You're all set — here are your tickets!</div>
   </div>
-  <div style="padding:28px 32px">
-    <h2 style="color:#1C2B1A;margin:0 0 8px">You're registered! 🎉</h2>
-    <p style="color:#6B7280;margin:0 0 24px">Hi ${checkoutInfo.firstName}, your order <strong>${orderNum}</strong> is confirmed.</p>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
-      <thead><tr style="background:#F7F5F0"><th style="padding:10px 12px;text-align:left;color:#3D5A38;font-size:0.85rem">Item</th><th style="padding:10px 12px;text-align:right;color:#3D5A38;font-size:0.85rem">Price</th></tr></thead>
-      <tbody>${itemsList}</tbody>
-      <tfoot><tr style="background:#F7F5F0"><td style="padding:10px 12px;font-weight:700;color:#1C2B1A">Total</td><td style="padding:10px 12px;font-weight:700;color:#1C2B1A;text-align:right">${cartTotal === 0 ? "Free" : "$" + cartTotal.toFixed(2)}</td></tr></tfoot>
+
+  <!-- Greeting -->
+  <div style="background:#fff;padding:24px 32px 8px">
+    <h2 style="color:#1C2B1A;margin:0 0 8px;font-size:1.2rem">Hey ${checkoutInfo.firstName}! 🎉</h2>
+    <p style="color:#6B7280;margin:0 0 4px;line-height:1.6">Your order <strong style="color:#1C2B1A">${orderNum}</strong> is confirmed. Your tickets are below — just show the QR code at the door.</p>
+  </div>
+
+  <!-- Tickets -->
+  <div style="background:#fff;padding:16px 32px 24px">
+    ${ticketBlocks}
+  </div>
+
+  <!-- Receipt -->
+  <div style="background:#fff;border-top:1px solid #F3F4F6;padding:20px 32px">
+    <div style="color:#374151;font-weight:700;font-size:0.9rem;margin-bottom:12px">📋 Order Receipt</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:4px">
+      <thead><tr style="background:#F7F5F0"><th style="padding:9px 14px;text-align:left;color:#3D5A38;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Item</th><th style="padding:9px 14px;text-align:center;color:#3D5A38;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Qty</th><th style="padding:9px 14px;text-align:right;color:#3D5A38;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">Price</th></tr></thead>
+      <tbody>${receiptRows}</tbody>
+      <tfoot><tr style="background:#F7F5F0"><td colspan="2" style="padding:11px 14px;font-weight:700;color:#1C2B1A;font-size:0.9rem">Total</td><td style="padding:11px 14px;font-weight:700;color:#1C2B1A;text-align:right;font-size:0.9rem">${cartTotal === 0 ? "Free" : "$" + cartTotal.toFixed(2)}</td></tr></tfoot>
     </table>
-    <p style="color:#6B7280;font-size:0.85rem;margin:0">Please bring your ticket ID or QR code to the event. Questions? Reply to this email.</p>
+    <p style="color:#9CA3AF;font-size:0.75rem;margin:14px 0 0">Payment method: ${payMethod === "card" ? "Credit / Debit Card" : payMethod === "paypal" ? "PayPal" : payMethod}</p>
   </div>
-  <div style="background:#F7F5F0;padding:16px 32px;text-align:center">
-    <p style="color:#9CA3AF;font-size:0.78rem;margin:0">New Harmony Life · Sioux City, IA</p>
+
+  <!-- Footer -->
+  <div style="background:#F7F5F0;border-radius:0 0 14px 14px;padding:18px 32px;text-align:center">
+    <p style="color:#9CA3AF;font-size:0.75rem;margin:0 0 6px">Questions? Reply to this email and we'll help you out.</p>
+    <p style="color:#9CA3AF;font-size:0.72rem;margin:0">New Harmony Life · Loess Hills Region, Iowa</p>
   </div>
-</div>`;
+
+</div></body></html>`;
+
           await fetch("https://api.resend.com/emails", {
             method: "POST",
             headers: { "Authorization": `Bearer ${rKey}`, "Content-Type": "application/json" },
             body: JSON.stringify({
               from: "New Harmony Life <tickets@newharmonylife.com>",
               to: [checkoutInfo.email],
-              subject: `Your tickets for ${cart[0]?.event?.title || "the event"} &mdash; ${orderNum}`,
+              subject: `Your tickets: ${cart.map(i => i.event.title).filter((v,i,a) => a.indexOf(v)===i).join(", ")} — ${orderNum}`,
               html: emailHtml,
             }),
           });
         } catch (emailErr) {
-          console.warn("Email send failed (non-fatal):", emailErr);
+          console.warn("Ticket email send failed (non-fatal):", emailErr);
         }
       }
 
