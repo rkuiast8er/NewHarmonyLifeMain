@@ -4,6 +4,7 @@
 // ============================================================
 
 import React, { createContext, useContext, useState, useRef, useEffect } from "react";
+import { Analytics } from "@vercel/analytics/react";
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 // Load jsQR for QR scanning
@@ -8192,6 +8193,7 @@ export default function App() {
       <AppProvider>
         <AppShell />
       </AppProvider>
+      <Analytics />
     </>
   );
 }
